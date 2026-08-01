@@ -93,13 +93,15 @@ messages_sent_30d, user_reports_30d, domain_used_by_sender_age_days`.
 
 ```
 { message_id, is_blocked: bool, risk_type: str | null, risk_confidence: float,
-  risk_signals: [str] }
+  risk_signals: tuple[str, ...] }
 ```
 
 This is the `SafetyVerdict` contract. Field names and types are exact — no
 renames, no extra required fields. `risk_type` is `"scam"`, `"spam"`, or
 `null` (never any other string). `risk_confidence` is a float in `[0, 1]`.
-`risk_signals` is always a list (never `null`); empty when no signal fired.
+`risk_signals` is always an immutable tuple (never `null`); empty when no
+signal fired. Convert it with `list(verdict.risk_signals)` only at a
+serialization boundary that requires an array.
 
 ## Resolved ADR binding this phase (SPEC.md §5, ADR-006 — verbatim)
 

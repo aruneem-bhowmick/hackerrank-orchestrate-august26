@@ -100,8 +100,11 @@ Every message, regardless of original modality, is normalized to:
 ### 1.3 Internal — Safety Verdict (output of P1)
 ```
 { message_id, is_blocked: bool, risk_type: str | null, risk_confidence: float,
-  risk_signals: [str] }
+  risk_signals: tuple[str, ...] }
 ```
+
+`risk_signals` is immutable once a verdict is constructed. A serializer that
+requires a JSON-style array must explicitly use `list(verdict.risk_signals)`.
 
 ### 1.4 Internal — Evidence Bundle (output of P3)
 ```

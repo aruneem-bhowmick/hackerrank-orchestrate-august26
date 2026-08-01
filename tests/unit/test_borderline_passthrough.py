@@ -42,7 +42,7 @@ def test_weak_scam_signal_populates_risk_fields_without_blocking():
     assert verdict.is_blocked is False
     assert verdict.risk_type == "scam"
     assert verdict.risk_confidence == 0.20
-    assert verdict.risk_signals == ["urgent deadline or account-suspension pressure language"]
+    assert verdict.risk_signals == ("urgent deadline or account-suspension pressure language",)
     assert verdict.risk_confidence < T_SCAM
 
 
@@ -61,7 +61,7 @@ def test_weak_spam_signal_populates_risk_fields_without_blocking():
     assert verdict.is_blocked is False
     assert verdict.risk_type == "spam"
     assert verdict.risk_confidence == 0.15
-    assert verdict.risk_signals == ["forwarded_count is 8, a mass-forward level"]
+    assert verdict.risk_signals == ("forwarded_count is 8, a mass-forward level",)
     assert verdict.risk_confidence < T_SPAM
 
 
@@ -80,7 +80,7 @@ def test_true_zero_signal_case_is_distinguishable_from_borderline():
     assert verdict.is_blocked is False
     assert verdict.risk_type is None
     assert verdict.risk_confidence == 0.0
-    assert verdict.risk_signals == []
+    assert verdict.risk_signals == ()
 
 
 def test_one_weight_unit_below_t_scam_stays_unblocked():

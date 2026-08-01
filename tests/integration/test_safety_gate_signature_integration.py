@@ -12,4 +12,4 @@ def test_score_message_accepts_a_real_bundle_row_shape(fixtures_dir):
     for message in bundle.messages.to_dict("records"):
         verdict = score_message(message, bundle.business_accounts, None)
         assert verdict.message_id == message["message_id"]
-        assert isinstance(verdict.risk_signals, list)
+        assert isinstance(verdict.risk_signals, tuple)

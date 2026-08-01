@@ -72,7 +72,7 @@ def test_score_message_smoke():
     assert verdict.is_blocked is False
     assert verdict.risk_type is None
     assert verdict.risk_confidence == 0.0
-    assert verdict.risk_signals == []
+    assert verdict.risk_signals == ()
 
 
 def test_score_message_is_deterministic_across_repeated_calls():

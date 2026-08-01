@@ -66,8 +66,8 @@ class SafetyVerdict:
     """The Safety Verdict contract from SPEC.md §1.3, exactly.
 
     risk_type is "scam", "spam", or None — never any other string.
-    risk_confidence is in [0, 1]. risk_signals is always a list (never
-    None); empty when no signal fired. is_blocked is True only when
+    risk_confidence is in [0, 1]. risk_signals is always an immutable tuple
+    (never None); empty when no signal fired. is_blocked is True only when
     risk_confidence reaches the threshold for risk_type (T_scam/T_spam);
     a verdict can have risk_type set and is_blocked False (the REQ-P1-06
     borderline case) — that wiring is added in a later prompt, but the
@@ -78,7 +78,7 @@ class SafetyVerdict:
     is_blocked: bool
     risk_type: str | None
     risk_confidence: float
-    risk_signals: list[str]
+    risk_signals: tuple[str, ...]
 ```
 
 ```python
