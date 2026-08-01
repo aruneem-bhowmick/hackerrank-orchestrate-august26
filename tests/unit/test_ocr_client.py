@@ -7,6 +7,9 @@ import pytest
 
 from router.errors import OCRClientError
 from router.ingestion import ocr
+from router.ingestion.pipeline import normalize_message
+
+from ingestion_fakes import FakeASRClient, make_message
 
 
 def _response(payload: object) -> SimpleNamespace:
@@ -68,6 +71,67 @@ def test_ocr_response_parser_marks_no_readable_text_as_a_non_crashing_failure(tm
     assert result.failure is True
     assert result.failure_reason == "the vision model found no readable text in the image"
     assert result.category == "meme"
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("has_readable_text", "false"),
+        ("extracted_text", 42),
+        ("category", 7),
+        ("confidence", "0.8"),
+        ("confidence", float("nan")),
+    ],
+)
+def test_ocr_response_parser_rejects_malformed_tool_value_types(tmp_path, field, value):
+    """Typed tool fields prevent malformed responses from becoming routing evidence."""
+    payload = {
+        "has_readable_text": True,
+        "extracted_text": "Readable poster text",
+        "category": "poster_promo",
+        "confidence": 0.8,
+    }
+    payload[field] = value
+
+    with pytest.raises(OCRClientError, match="malformed tool result"):
+        ocr._ocr_result_from_response(_response(payload), tmp_path / "bad.jpg")
+
+
+def test_image_normalization_falls_back_when_the_ocr_parser_rejects_a_payload(
+    load_fixture_bundle, fixtures_dir
+):
+    """An OCR parser error stays inside the media fallback path rather than aborting the batch."""
+    bundle = load_fixture_bundle("dataset_valid")
+
+    class MalformedResponseClient:
+        """OCR test double that exercises the concrete malformed-payload parser path."""
+
+        def extract(self, image_path):
+            """Parse a response whose text field violates the structured tool contract."""
+            return ocr._ocr_result_from_response(
+                _response(
+                    {
+                        "has_readable_text": True,
+                        "extracted_text": 42,
+                        "category": "poster_promo",
+                        "confidence": 0.8,
+                    }
+                ),
+                image_path,
+            )
+
+    result = normalize_message(
+        make_message(message_id="image_malformed", media_type="image", media_id="img_test_001"),
+        bundle,
+        fixtures_dir / "dataset_valid",
+        MalformedResponseClient(),
+        FakeASRClient(),
+    )
+
+    assert result.media_failure is True
+    assert result.normalized_text == "Caption"
+    assert result.media_confidence == 0.0
+    assert result.media_failure_reason is not None
 
 
 @pytest.mark.parametrize(

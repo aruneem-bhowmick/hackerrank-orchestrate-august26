@@ -8,6 +8,7 @@ is never needed just to categorize an image already being read for text.
 """
 
 import base64
+import math
 import mimetypes
 import os
 from dataclasses import dataclass
@@ -192,20 +193,34 @@ def _ocr_result_from_response(response: object, image_path: Path) -> OCRResult:
         )
 
     try:
-        has_readable_text = bool(payload["has_readable_text"])
-        text = str(payload["extracted_text"])
+        has_readable_text = payload["has_readable_text"]
+        text = payload["extracted_text"]
         category = payload.get("category")
-        confidence = max(0.0, min(1.0, float(payload["confidence"])))
-    except (KeyError, TypeError, ValueError) as exc:
+        confidence = payload["confidence"]
+    except KeyError as exc:
         raise OCRClientError(
             f"Anthropic OCR response for '{image_path.name}' had an incomplete tool result: {exc}"
         ) from exc
+
+    if (
+        not isinstance(has_readable_text, bool)
+        or not isinstance(text, str)
+        or (category is not None and not isinstance(category, str))
+        or isinstance(confidence, bool)
+        or not isinstance(confidence, (int, float))
+        or not math.isfinite(float(confidence))
+    ):
+        raise OCRClientError(
+            f"Anthropic OCR response for '{image_path.name}' had a malformed tool result"
+        )
+
+    confidence = max(0.0, min(1.0, float(confidence)))
 
     failure = not has_readable_text or not text.strip()
     return OCRResult(
         text=text,
         confidence=confidence,
-        category=category if isinstance(category, str) else None,
+        category=category,
         failure=failure,
         failure_reason=_NO_READABLE_TEXT_REASON if failure else None,
     )
