@@ -321,6 +321,26 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   `code/router/safety/thresholds.py` alongside each signal's weight and the
   dataset observation that justifies it.
 
+  Post-implementation calibration check against `sample_messages.csv`
+  (2026-08-01): scoring all 30 rows and comparing `is_blocked` against
+  "ground-truth `message_type` is `scam` or `spam`" gives 27/30 (90%)
+  agreement — 4/5 true scam/spam rows correctly blocked, 23/25 non-risk
+  rows correctly left unblocked. The three disagreements are expected
+  given P1's scope, not errors: `sample_msg_014`/`015` are blocked by P1
+  as spam (chain-forward / high-volume-promo signals) while the
+  ground-truth ties their `mute` action to personalization ("similar
+  messages were ignored/dismissed by this user", message_type
+  `forward`/`promotion`, not `spam`) — P1's `risk_type` is an intermediate
+  signal into P4, not a guaranteed final `message_type`, and both rows'
+  `action` (`mute`) still ends up correct either way. `sample_msg_043` is
+  a false negative (P1 scores it 0.30, below `T_spam`) because its
+  ground-truth reason is purely personalization ("user has opted out of
+  or repeatedly dismissed similar marketing messages") — a signal P1
+  cannot see by construction (REQ-P1-01) and is explicitly P3/P4's job to
+  catch once built. No threshold change made on the strength of this
+  check; revisit only if P4 fusion still under-catches these cases once
+  personalization signals are available to it.
+
 ---
 
 ## 6. Open Questions (resolve once Claude Code has inspected the actual dataset)
