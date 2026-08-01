@@ -3,28 +3,12 @@
 import pytest
 
 from router.errors import ASRClientError, OCRClientError
-from router.ingestion.asr import ASRResult
+from router.ingestion.asr import ASRResult, build_asr_client
 from router.ingestion.ocr import OCRResult
+from router.ingestion.ocr import build_ocr_client
 from router.ingestion.pipeline import normalize_message
 
-from ingestion_fakes import FakeASRClient, FakeOCRClient
-
-
-def _message(media_type: str, media_id: str, caption: str = "Caption") -> dict[str, object]:
-    """Build a compact media row with all normalized-message passthrough fields."""
-    return {
-        "message_id": f"{media_type}_{media_id or 'missing'}",
-        "user_id": "u_1",
-        "conversation_type": "business",
-        "group_id": "",
-        "business_id": "business_1",
-        "sender_user_id": "",
-        "created_at": "2026-08-01 09:00",
-        "message_text": caption,
-        "media_type": media_type,
-        "media_id": media_id,
-        "forwarded_count": "0",
-    }
+from ingestion_fakes import FakeASRClient, FakeOCRClient, make_message
 
 
 @pytest.mark.parametrize(
@@ -40,7 +24,7 @@ def test_image_reference_failures_preserve_caption_and_explain_the_fallback(
     """Missing image references never discard known text or masquerade as successful OCR."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
-        _message("image", media_id),
+        make_message(message_id=f"image_{media_id or 'missing'}", media_type="image", media_id=media_id),
         bundle,
         fixtures_dir / "dataset_valid",
         FakeOCRClient(),
@@ -57,7 +41,7 @@ def test_blank_ocr_output_is_a_low_confidence_failure_with_the_caption(load_fixt
     """A model result without usable text cannot be treated as a successful image read."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
-        _message("image", "img_test_001"),
+        make_message(message_id="image_img_test_001", media_type="image", media_id="img_test_001"),
         bundle,
         fixtures_dir / "dataset_valid",
         FakeOCRClient(OCRResult(" ", 0.9, "meme", True, "no readable text")),
@@ -84,7 +68,12 @@ def test_voice_reference_failures_produce_an_explicit_empty_transcript(
     """Voice fallback is clear about missing media and always retains its modality category."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
-        _message("voice", media_id, caption=""),
+        make_message(
+            message_id=f"voice_{media_id or 'missing'}",
+            media_type="voice",
+            media_id=media_id,
+            message_text="",
+        ),
         bundle,
         fixtures_dir / "dataset_valid",
         FakeOCRClient(),
@@ -102,7 +91,12 @@ def test_blank_asr_output_is_a_low_confidence_failure(load_fixture_bundle, fixtu
     """A garbled or silent ASR result is bounded to the fallback confidence ceiling."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
-        _message("voice", "vn_test_001", caption=""),
+        make_message(
+            message_id="voice_vn_test_001",
+            media_type="voice",
+            media_id="vn_test_001",
+            message_text="",
+        ),
         bundle,
         fixtures_dir / "dataset_valid",
         FakeOCRClient(),
@@ -127,7 +121,7 @@ def test_image_fallback_replaces_blank_client_reasons(
     """Failed image rows always carry a usable reason even when the client supplied none."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
-        _message("image", "img_test_001"),
+        make_message(message_id="image_blank_reason", media_type="image", media_id="img_test_001"),
         bundle,
         fixtures_dir / "dataset_valid",
         client,
@@ -151,7 +145,12 @@ def test_voice_fallback_replaces_blank_client_reasons(
     """Failed voice rows always carry a usable reason even when the client supplied none."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
-        _message("voice", "vn_test_001", caption=""),
+        make_message(
+            message_id="voice_blank_reason",
+            media_type="voice",
+            media_id="vn_test_001",
+            message_text="",
+        ),
         bundle,
         fixtures_dir / "dataset_valid",
         FakeOCRClient(),
@@ -160,3 +159,48 @@ def test_voice_fallback_replaces_blank_client_reasons(
 
     assert result.media_failure is True
     assert result.media_failure_reason == expected_reason
+
+
+def test_missing_ocr_key_falls_back_through_image_normalization(
+    load_fixture_bundle, fixtures_dir, monkeypatch
+):
+    """A missing OCR credential produces the same explicit image fallback as any client error."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    bundle = load_fixture_bundle("dataset_valid")
+    result = normalize_message(
+        make_message(message_id="image_no_key", media_type="image", media_id="img_test_001"),
+        bundle,
+        fixtures_dir / "dataset_valid",
+        build_ocr_client(),
+        FakeASRClient(),
+    )
+
+    assert result.media_failure is True
+    assert result.media_confidence <= 0.2
+    assert result.normalized_text == "Caption"
+    assert "ANTHROPIC_API_KEY" in result.media_failure_reason
+
+
+def test_missing_asr_key_falls_back_through_voice_normalization(
+    load_fixture_bundle, fixtures_dir, monkeypatch
+):
+    """A missing ASR credential produces the same explicit voice fallback as any client error."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    bundle = load_fixture_bundle("dataset_valid")
+    result = normalize_message(
+        make_message(
+            message_id="voice_no_key",
+            media_type="voice",
+            media_id="vn_test_001",
+            message_text="",
+        ),
+        bundle,
+        fixtures_dir / "dataset_valid",
+        FakeOCRClient(),
+        build_asr_client(),
+    )
+
+    assert result.media_failure is True
+    assert result.media_confidence <= 0.2
+    assert result.normalized_text == ""
+    assert "OPENAI_API_KEY" in result.media_failure_reason

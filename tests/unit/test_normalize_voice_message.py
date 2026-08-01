@@ -4,26 +4,7 @@ from router.errors import ASRClientError
 from router.ingestion.asr import ASRResult
 from router.ingestion.pipeline import normalize_message
 
-from ingestion_fakes import FakeASRClient, FakeOCRClient
-
-
-def _voice_message(**overrides) -> dict[str, object]:
-    """Build one voice row matching the messages.csv columns."""
-    message: dict[str, object] = {
-        "message_id": "voice_message",
-        "user_id": "u_1",
-        "conversation_type": "personal",
-        "group_id": "",
-        "business_id": "",
-        "sender_user_id": "u_2",
-        "created_at": "2026-08-01 10:00",
-        "message_text": "",
-        "media_type": "voice",
-        "media_id": "vn_test_001",
-        "forwarded_count": "0",
-    }
-    message.update(overrides)
-    return message
+from ingestion_fakes import FakeASRClient, FakeOCRClient, make_message
 
 
 def test_voice_normalization_uses_the_transcript_in_the_shared_message_shape(
@@ -32,7 +13,16 @@ def test_voice_normalization_uses_the_transcript_in_the_shared_message_shape(
     """Voice messages emerge as NormalizedMessage records, not a separate downstream type."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
-        _voice_message(),
+        make_message(
+            message_id="voice_message",
+            conversation_type="personal",
+            business_id="",
+            sender_user_id="u_2",
+            created_at="2026-08-01 10:00",
+            message_text="",
+            media_type="voice",
+            media_id="vn_test_001",
+        ),
         bundle,
         fixtures_dir / "dataset_valid",
         FakeOCRClient(),
@@ -51,7 +41,16 @@ def test_voice_normalization_records_client_errors_as_a_low_confidence_fallback(
     """An ASR client outage is explicit and cannot crash the message batch."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
-        _voice_message(),
+        make_message(
+            message_id="voice_message",
+            conversation_type="personal",
+            business_id="",
+            sender_user_id="u_2",
+            created_at="2026-08-01 10:00",
+            message_text="",
+            media_type="voice",
+            media_id="vn_test_001",
+        ),
         bundle,
         fixtures_dir / "dataset_valid",
         FakeOCRClient(),

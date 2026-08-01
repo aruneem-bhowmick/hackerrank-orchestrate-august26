@@ -12,6 +12,29 @@ from router.ingestion.asr import ASRResult
 from router.ingestion.ocr import OCRResult
 
 
+def make_message(**overrides: object) -> dict[str, object]:
+    """Build a messages.csv-shaped record with optional field overrides.
+
+    Tests use this one helper so fixture rows retain the same full shape
+    while each case changes only the fields that matter to its scenario.
+    """
+    message: dict[str, object] = {
+        "message_id": "message",
+        "user_id": "u_1",
+        "conversation_type": "business",
+        "group_id": "",
+        "business_id": "business_1",
+        "sender_user_id": "",
+        "created_at": "2026-08-01 09:00",
+        "message_text": "Caption",
+        "media_type": "",
+        "media_id": "",
+        "forwarded_count": "0",
+    }
+    message.update(overrides)
+    return message
+
+
 class FakeOCRClient:
     """OCRClient test double returning a scripted result or raising a scripted error.
 
