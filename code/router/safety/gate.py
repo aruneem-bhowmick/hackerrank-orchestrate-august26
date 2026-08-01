@@ -17,6 +17,8 @@ from router.safety.signals import detect_scam_signals, detect_spam_signals
 from router.safety.thresholds import FORWARD_CHAIN_COUNT_THRESHOLD, T_SCAM, T_SPAM
 from router.safety.verdict import SafetyVerdict
 
+_CONFIDENCE_DECIMAL_PLACES = 6
+
 
 def score_message(
     message: dict,
@@ -52,12 +54,18 @@ def score_message(
     forwarded_count = _parse_forwarded_count(message.get("forwarded_count", ""))
 
     scam_matches = detect_scam_signals(message_text, business, verified_brand_names)
-    scam_confidence = min(1.0, sum(signal.weight for signal in scam_matches))
+    scam_confidence = round(
+        min(1.0, sum(signal.weight for signal in scam_matches)),
+        _CONFIDENCE_DECIMAL_PLACES,
+    )
 
     spam_matches = detect_spam_signals(
         message_text, forwarded_count, business, forward_chain_open_rate
     )
-    spam_confidence = min(1.0, sum(signal.weight for signal in spam_matches))
+    spam_confidence = round(
+        min(1.0, sum(signal.weight for signal in spam_matches)),
+        _CONFIDENCE_DECIMAL_PLACES,
+    )
 
     if scam_confidence <= 0.0 and spam_confidence <= 0.0:
         return SafetyVerdict(

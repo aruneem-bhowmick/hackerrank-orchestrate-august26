@@ -5,6 +5,7 @@ import inspect
 import pandas as pd
 
 from router.safety.gate import score_message
+from router.safety.verdict import RiskSignal
 
 _PERSONALIZATION_PARAM_NAMES = frozenset(
     {
@@ -91,3 +92,22 @@ def test_score_message_is_deterministic_across_repeated_calls():
     first = score_message(message, empty_business_accounts, None)
     second = score_message(message, empty_business_accounts, None)
     assert first == second
+
+
+def test_category_tie_uses_rounded_confidence_and_prefers_scam(monkeypatch):
+    """Equivalent floating-point sums form a scam-preferred tie."""
+    monkeypatch.setattr(
+        "router.safety.gate.detect_scam_signals",
+        lambda *_: [RiskSignal("scam", 0.30, "scam signal")],
+    )
+    monkeypatch.setattr(
+        "router.safety.gate.detect_spam_signals",
+        lambda *_: [RiskSignal("spam_a", 0.10, "spam signal A"), RiskSignal("spam_b", 0.20, "spam signal B")],
+    )
+
+    verdict = score_message(
+        _minimal_message(), pd.DataFrame(columns=["business_id", "verified", "brand_name"]), None
+    )
+
+    assert verdict.risk_type == "scam"
+    assert verdict.risk_confidence == 0.30
