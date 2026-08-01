@@ -13,6 +13,7 @@ personalization data this module never saw in the first place.
 import pandas as pd
 
 from router.dataset.loader import DatasetBundle
+from router.errors import SafetyGateError
 from router.safety.message import SafetyMessage
 from router.safety.signals import detect_scam_signals, detect_spam_signals
 from router.safety.thresholds import FORWARD_CHAIN_COUNT_THRESHOLD, T_SCAM, T_SPAM
@@ -126,7 +127,9 @@ def run_safety_gate(bundle: DatasetBundle) -> dict[str, SafetyVerdict]:
     bundle.messages, returning a dict keyed by message_id. The returned
     dict has exactly one entry per row of bundle.messages — a missing
     verdict here would otherwise surface only as a mysterious gap much
-    later, in P5's output.
+    later, in P5's output. Raises SafetyGateError (a DatasetError, so
+    code/main.py's existing error handling catches it) rather than
+    crashing with an unhandled exception if that guarantee cannot hold.
     """
     forward_chain_open_rate = compute_forward_chain_open_rate(
         bundle.message_history, bundle.message_events
@@ -139,7 +142,7 @@ def run_safety_gate(bundle: DatasetBundle) -> dict[str, SafetyVerdict]:
     }
 
     if len(verdicts) != len(bundle.messages):
-        raise AssertionError(
+        raise SafetyGateError(
             f"run_safety_gate produced {len(verdicts)} verdict(s) for "
             f"{len(bundle.messages)} message(s) — bundle.messages likely "
             "has a duplicate message_id."

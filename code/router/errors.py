@@ -19,3 +19,7 @@ class TimelineJoinError(DatasetError):
 
 class RowCountParityError(DatasetError):
     """Raised when messages.csv and output.csv row counts or message_id sets disagree."""
+
+
+class SafetyGateError(DatasetError):
+    """Raised when the safety gate cannot produce a verdict for every message."""
