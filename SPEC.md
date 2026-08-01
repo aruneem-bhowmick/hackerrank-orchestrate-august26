@@ -299,8 +299,12 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   once P4 fusion is built. `score_message`'s signature takes only the
   message, `business_accounts`, and a precomputed aggregate engagement
   rate — never `user_id`, `message_history`, `message_events`, `users`, or
-  `user_business_history` — so REQ-P1-01/REQ-P1-04 user-independence is
-  enforced structurally, not just by convention.
+  `user_business_history`. score_message immediately passes the loaded row
+  through a `SafetyMessage` allowlist that copies only `message_id`,
+  `business_id`, `message_text`, and `forwarded_count`; detector code never
+  receives the original row. The boundary-enforcement test verifies that the
+  DTO contains no user-scoped fields and that changing such fields cannot
+  change a verdict.
 
   Signal design was calibrated against the real dataset rather than
   invented: `business_accounts.csv`'s 26 unverified rows whose `brand_name`

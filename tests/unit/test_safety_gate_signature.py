@@ -1,10 +1,12 @@
 """Unit tests proving score_message's signature structurally excludes personalization."""
 
 import inspect
+from dataclasses import fields
 
 import pandas as pd
 
 from router.safety.gate import score_message
+from router.safety.message import SafetyMessage
 from router.safety.verdict import RiskSignal
 
 _PERSONALIZATION_PARAM_NAMES = frozenset(
@@ -27,6 +29,40 @@ def test_score_message_signature_excludes_personalization_inputs():
     """score_message has no parameter through which personalization data could pass."""
     parameters = set(inspect.signature(score_message).parameters)
     assert parameters.isdisjoint(_PERSONALIZATION_PARAM_NAMES)
+
+
+def test_safety_message_allowlist_drops_user_scoped_fields_before_scoring():
+    """The scorer's DTO cannot carry receiver identity, history, or group fields."""
+    message = SafetyMessage.from_record(_minimal_message())
+
+    assert [field.name for field in fields(SafetyMessage)] == [
+        "message_id",
+        "business_id",
+        "message_text",
+        "forwarded_count",
+    ]
+    assert not hasattr(message, "user_id")
+    assert not hasattr(message, "group_id")
+    assert not hasattr(message, "message_history")
+
+
+def test_user_scoped_record_fields_cannot_change_safety_scoring():
+    """Changing user-specific fields leaves the allowlisted safety input unchanged."""
+    empty_business_accounts = pd.DataFrame(
+        columns=["business_id", "verified", "brand_name"]
+    )
+    original = _minimal_message(message_text="Confirm your password now, act now.")
+    altered = {
+        **original,
+        "user_id": "u_999",
+        "group_id": "group_999",
+        "message_history": "high engagement",
+        "user_business_history": "trusted sender",
+    }
+
+    assert score_message(original, empty_business_accounts, None) == score_message(
+        altered, empty_business_accounts, None
+    )
 
 
 def test_score_message_signature_is_exactly_message_business_and_open_rate():

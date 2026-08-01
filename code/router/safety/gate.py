@@ -13,6 +13,7 @@ personalization data this module never saw in the first place.
 import pandas as pd
 
 from router.dataset.loader import DatasetBundle
+from router.safety.message import SafetyMessage
 from router.safety.signals import detect_scam_signals, detect_spam_signals
 from router.safety.thresholds import FORWARD_CHAIN_COUNT_THRESHOLD, T_SCAM, T_SPAM
 from router.safety.verdict import SafetyVerdict
@@ -28,19 +29,12 @@ def score_message(
     """Score one message for safety risk, independent of any receiving user.
 
     message is one row of DatasetBundle.messages as a dict (e.g. from
-    bundle.messages.to_dict("records")), keyed by the messages.csv column
-    names. business_accounts is DatasetBundle.business_accounts verbatim —
-    sender-side, global business metadata, not scoped to any receiving
-    user. forward_chain_open_rate is a single precomputed float (or None
-    if it cannot be computed) representing the aggregate historical open
-    rate for high-forwarded_count messages across the entire user base.
-
-    Deliberately excluded from the signature: user_id, UserTimeline,
-    DatasetBundle.users, DatasetBundle.message_history,
-    DatasetBundle.message_events, DatasetBundle.user_business_history,
-    DatasetBundle.groups, DatasetBundle.group_members. Their absence is
-    what makes the safety gate's user-independence structural rather than
-    a convention someone could accidentally violate later.
+    bundle.messages.to_dict("records")). The function first converts it to
+    SafetyMessage, which copies only message_id, business_id, message_text,
+    and forwarded_count; no receiver-scoped field is available to detector
+    code after that boundary. business_accounts is sender-side, global
+    business metadata. forward_chain_open_rate is an aggregate float (or
+    None) for high-forwarded_count messages across the full user base.
 
     Borderline contract: whenever the winning risk category's combined
     signal weight is > 0, risk_type/risk_confidence/risk_signals are
@@ -48,10 +42,11 @@ def score_message(
     blocking threshold. is_blocked=False with risk_type set and
     risk_confidence > 0 is a valid, expected verdict shape.
     """
-    business = _lookup_business(message.get("business_id", ""), business_accounts)
+    safety_message = SafetyMessage.from_record(message)
+    business = _lookup_business(safety_message.business_id, business_accounts)
     verified_brand_names = _verified_brand_names(business_accounts)
-    message_text = message.get("message_text", "")
-    forwarded_count = _parse_forwarded_count(message.get("forwarded_count", ""))
+    message_text = safety_message.message_text
+    forwarded_count = _parse_forwarded_count(safety_message.forwarded_count)
 
     scam_matches = detect_scam_signals(message_text, business, verified_brand_names)
     scam_confidence = round(
@@ -69,7 +64,7 @@ def score_message(
 
     if scam_confidence <= 0.0 and spam_confidence <= 0.0:
         return SafetyVerdict(
-            message_id=message["message_id"],
+            message_id=safety_message.message_id,
             is_blocked=False,
             risk_type=None,
             risk_confidence=0.0,
@@ -85,7 +80,7 @@ def score_message(
         risk_type, confidence, matches, threshold = "spam", spam_confidence, spam_matches, T_SPAM
 
     return SafetyVerdict(
-        message_id=message["message_id"],
+        message_id=safety_message.message_id,
         is_blocked=confidence >= threshold,
         risk_type=risk_type,
         risk_confidence=confidence,

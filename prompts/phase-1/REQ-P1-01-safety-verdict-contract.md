@@ -117,6 +117,11 @@ def score_message(
     """
 ```
 
+`score_message` immediately converts the loaded row to a `SafetyMessage`
+allowlist containing only `message_id`, `business_id`, `message_text`, and
+`forwarded_count`. Detector code receives that DTO, never a receiver-scoped
+field from the original row.
+
 ## Implementation details
 1. Create `code/router/safety/__init__.py` with a one-line module docstring
    describing the package ("Deterministic, user-independent scam/spam risk
@@ -204,6 +209,8 @@ prompt — both are pure, small, and fully exercised by the tests above.
 - All acceptance criteria pass.
 - All applicable test types implemented (others marked N/A with reason).
 - `SafetyVerdict` matches SPEC.md §1.3 exactly.
+- The SafetyMessage allowlist excludes `user_id`, group fields, history, and
+  business-relationship fields before detector code runs.
 - No change to a shared data contract beyond adding the new §1.3
   implementation itself — `DatasetBundle` (§1.0) is untouched.
 
