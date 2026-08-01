@@ -51,3 +51,13 @@ class ASRClientError(MediaIngestionError):
 
 class PersonalizationError(DatasetError):
     """Raised when personalization cannot produce one bundle per message."""
+
+
+class DecisionFusionError(DatasetError):
+    """Raised when decision fusion cannot produce one Decision Record per message.
+
+    Also raised by a self-check that catches a message_type value outside
+    the fixed allowed-value list, which should be unreachable given the
+    selector's own exhaustive branches — see
+    router.decision.message_type.validate_message_type.
+    """
