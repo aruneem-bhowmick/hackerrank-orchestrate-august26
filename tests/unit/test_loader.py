@@ -1,3 +1,5 @@
+"""Unit tests for single-file CSV loading and column validation."""
+
 from pathlib import Path
 
 import pytest
@@ -10,6 +12,7 @@ FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "dataset_valid
 
 
 def test_load_csv_returns_string_dtype_with_empty_string_for_blank_cell():
+    """A blank cell loads as an empty string, not a pandas NaN."""
     spec = DatasetFileSpec(
         "user_business_history.csv",
         ("user_id", "business_id", "promotions_opted_out_at"),
@@ -20,12 +23,14 @@ def test_load_csv_returns_string_dtype_with_empty_string_for_blank_cell():
 
 
 def test_load_csv_raises_on_missing_required_column():
+    """A required column absent from the file raises, naming the column."""
     spec = DatasetFileSpec("users.csv", ("user_id", "not_a_real_column"))
     with pytest.raises(DatasetSchemaError, match="not_a_real_column"):
         _load_csv(FIXTURES_DIR, spec)
 
 
 def test_load_csv_raises_on_missing_file():
+    """A file that does not exist on disk raises, naming the filename."""
     spec = DatasetFileSpec("does_not_exist.csv", ())
     with pytest.raises(DatasetSchemaError, match="does_not_exist.csv"):
         _load_csv(FIXTURES_DIR, spec)

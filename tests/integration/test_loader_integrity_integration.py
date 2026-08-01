@@ -1,3 +1,5 @@
+"""Integration tests confirming the integrity guard is wired into the loader."""
+
 from pathlib import Path
 
 import pytest
@@ -12,12 +14,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_extra_csv_and_broken_schema_raises_integrity_error_first():
+    """A fixture broken both ways surfaces the integrity error, naming the extra file."""
     fixture_dir = FIXTURES_DIR / "dataset_with_extra_csv"
     with pytest.raises(DatasetIntegrityError, match="notes.csv"):
         load_dataset_bundle(fixture_dir, repo_root=fixture_dir)
 
 
 def test_extra_csv_fixture_does_not_raise_schema_error():
+    """The same broken fixture never reaches schema validation at all."""
     fixture_dir = FIXTURES_DIR / "dataset_with_extra_csv"
     try:
         load_dataset_bundle(fixture_dir, repo_root=fixture_dir)
@@ -29,6 +33,7 @@ def test_extra_csv_fixture_does_not_raise_schema_error():
 
 
 def test_ground_truth_file_outside_dataset_dir_raises():
+    """A ground-truth-named file next to dataset/ halts the guard, naming it."""
     fixture_dir = FIXTURES_DIR / "repo_with_ground_truth_file"
     with pytest.raises(DatasetIntegrityError, match="ground_truth_labels.csv"):
         integrity.enforce_dataset_integrity(
@@ -39,6 +44,7 @@ def test_ground_truth_file_outside_dataset_dir_raises():
 
 
 def test_real_repository_has_no_integrity_violation():
+    """The guard passes cleanly on this project's own real repository tree."""
     assert (
         integrity.enforce_dataset_integrity(
             repo_root=REPO_ROOT,

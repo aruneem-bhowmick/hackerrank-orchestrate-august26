@@ -1,3 +1,5 @@
+"""Integration tests for row-count parity against real loaded fixtures."""
+
 from pathlib import Path
 
 import pytest
@@ -10,16 +12,19 @@ FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 def _load(fixture_name: str):
+    """Load a named fixture, scanning only within it for stray files."""
     fixture_dir = FIXTURES_DIR / fixture_name
     return load_dataset_bundle(fixture_dir, repo_root=fixture_dir)
 
 
 def test_validate_row_count_parity_passes_on_valid_fixture():
+    """A fixture whose messages and output template agree passes parity."""
     bundle = _load("dataset_valid")
     assert validate_row_count_parity(bundle.messages, bundle.output_template) is None
 
 
 def test_validate_row_count_parity_raises_on_row_count_mismatch_fixture():
+    """A fixture with an extra output row fails parity, naming the mismatch."""
     bundle = _load("dataset_row_count_mismatch")
     with pytest.raises(RowCountParityError, match="Row count mismatch"):
         validate_row_count_parity(bundle.messages, bundle.output_template)

@@ -1,3 +1,5 @@
+"""System tests for the assembled dataset load and validation stage."""
+
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_full_load_stage_sequence_on_fixture_dataset():
+    """Load, timeline join, and parity check run in sequence without raising."""
     fixture_dir = FIXTURES_DIR / "dataset_valid"
     bundle = load_dataset_bundle(fixture_dir, repo_root=fixture_dir)
     timelines = build_user_timelines(bundle)
@@ -21,6 +24,7 @@ def test_full_load_stage_sequence_on_fixture_dataset():
 
 
 def test_cli_exits_zero_and_prints_a_plain_summary_on_the_real_dataset():
+    """Running the CLI against the real dataset exits 0 with a readable summary."""
     result = subprocess.run(
         [sys.executable, str(REPO_ROOT / "code" / "main.py")],
         cwd=REPO_ROOT,
