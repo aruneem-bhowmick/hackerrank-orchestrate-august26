@@ -59,6 +59,7 @@ def _history_row(message_id, user_id, created_at):
         zip(
             _HISTORY_COLUMNS,
             (message_id, user_id, "personal", "", "", "", created_at, "hi", "", "", "0"),
+            strict=True,
         )
     )
 
@@ -66,7 +67,7 @@ def _history_row(message_id, user_id, created_at):
 def _event_row(message_id, user_id):
     """Build one message_events row dict with the given identity fields."""
     return dict(
-        zip(_EVENT_COLUMNS, (user_id, message_id, "1", "0", "5", "0", "0", "0"))
+        zip(_EVENT_COLUMNS, (user_id, message_id, "1", "0", "5", "0", "0", "0"), strict=True)
     )
 
 
