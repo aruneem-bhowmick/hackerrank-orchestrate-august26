@@ -31,6 +31,10 @@ DEFAULT_EXCLUDED_DIR_NAMES: frozenset[str] = frozenset(
         ".history",
         ".cursorindexingignore",
         "node_modules",
+        # Synthetic fixtures for this guard's own tests intentionally use
+        # ground-truth-suggestive names; they are committed test assets,
+        # not organizer-dropped files, so they are excluded from the scan.
+        "tests",
     }
 )
 
@@ -47,15 +51,19 @@ def find_suspicious_files(repo_root: Path, dataset_dir: Path) -> list[Path]:
     """Return files under repo_root whose stem matches a suspicious ground-truth pattern.
 
     Excludes dataset_dir's own contents (governed by the allowlist check
-    instead) and any directory named in DEFAULT_EXCLUDED_DIR_NAMES.
+    instead) and any directory named in DEFAULT_EXCLUDED_DIR_NAMES, matched
+    relative to repo_root so an excluded name appearing above repo_root on
+    disk (e.g. because a fixture happens to live under a real "tests/"
+    directory) does not unintentionally exclude files inside repo_root.
     """
     matches: list[Path] = []
     for path in repo_root.rglob("*"):
         if path.is_dir():
             continue
-        if any(part in DEFAULT_EXCLUDED_DIR_NAMES for part in path.parts):
-            continue
         if dataset_dir in path.parents:
+            continue
+        relative_dir_parts = path.relative_to(repo_root).parent.parts
+        if any(part in DEFAULT_EXCLUDED_DIR_NAMES for part in relative_dir_parts):
             continue
         stem = path.stem.lower()
         if any(pattern in stem for pattern in SUSPICIOUS_NAME_PATTERNS):
