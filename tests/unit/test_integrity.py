@@ -11,17 +11,15 @@ from router.dataset.integrity import (
 )
 from router.dataset.schema import DATASET_ALLOWLIST
 
-FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures"
 
-
-def test_find_disallowed_dataset_files_returns_empty_for_valid_fixture():
+def test_find_disallowed_dataset_files_returns_empty_for_valid_fixture(fixtures_dir):
     """A dataset directory with only allowlisted files reports no violations."""
-    assert find_disallowed_dataset_files(FIXTURES_DIR / "dataset_valid", DATASET_ALLOWLIST) == []
+    assert find_disallowed_dataset_files(fixtures_dir / "dataset_valid", DATASET_ALLOWLIST) == []
 
 
-def test_find_disallowed_dataset_files_returns_the_extra_file():
+def test_find_disallowed_dataset_files_returns_the_extra_file(fixtures_dir):
     """A CSV not in the allowlist is reported by name."""
-    fixture_dir = FIXTURES_DIR / "dataset_with_extra_csv"
+    fixture_dir = fixtures_dir / "dataset_with_extra_csv"
     disallowed = find_disallowed_dataset_files(fixture_dir, DATASET_ALLOWLIST)
     assert [path.name for path in disallowed] == ["notes.csv"]
 
@@ -68,9 +66,9 @@ def test_find_suspicious_files_excludes_the_dataset_directory_itself(tmp_path):
     assert find_suspicious_files(tmp_path, dataset_dir) == []
 
 
-def test_find_suspicious_files_on_real_fixture_tree():
+def test_find_suspicious_files_on_real_fixture_tree(fixtures_dir):
     """A ground-truth-named file outside the fixture's dataset/ subdirectory is found."""
-    fixture_dir = FIXTURES_DIR / "repo_with_ground_truth_file"
+    fixture_dir = fixtures_dir / "repo_with_ground_truth_file"
     matches = find_suspicious_files(fixture_dir, fixture_dir / "dataset")
     assert [path.name for path in matches] == ["ground_truth_labels.csv"]
 
