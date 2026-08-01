@@ -4,11 +4,21 @@ from pathlib import Path
 
 import pytest
 
-from router.dataset.loader import _load_csv
+from router.dataset.loader import _load_csv, _resolve_repo_root
 from router.dataset.schema import DatasetFileSpec
 from router.errors import DatasetSchemaError
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "dataset_valid"
+
+
+def test_resolve_repo_root_defaults_to_dataset_dir_parent():
+    """With no override, the scan root is the dataset directory's parent."""
+    assert _resolve_repo_root(Path("/x/dataset"), None) == Path("/x")
+
+
+def test_resolve_repo_root_honors_explicit_override():
+    """An explicit repo_root takes precedence over the default derivation."""
+    assert _resolve_repo_root(Path("/x/dataset"), Path("/y")) == Path("/y")
 
 
 def test_load_csv_returns_string_dtype_with_empty_string_for_blank_cell():

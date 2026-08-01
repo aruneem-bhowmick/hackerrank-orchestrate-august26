@@ -64,7 +64,7 @@ def load_dataset_bundle(
     file loads and validates, or the call raises.
     """
     dataset_path = Path(dataset_dir)
-    root_path = Path(repo_root) if repo_root is not None else dataset_path.parent
+    root_path = _resolve_repo_root(dataset_path, repo_root)
 
     integrity.enforce_dataset_integrity(
         repo_root=root_path,
@@ -77,6 +77,18 @@ def load_dataset_bundle(
         for spec in DATASET_FILES
     }
     return DatasetBundle(**loaded)
+
+
+def _resolve_repo_root(dataset_dir: Path, repo_root: str | Path | None) -> Path:
+    """Resolve the root to scan for integrity violations.
+
+    Defaults to dataset_dir's parent, correct when dataset/ is a direct
+    child of the repo root (the real project layout). Callers with a
+    different layout must pass repo_root explicitly; this function makes
+    that default an explicit, independently testable contract rather than
+    an inline expression.
+    """
+    return Path(repo_root) if repo_root is not None else dataset_dir.parent
 
 
 def _load_csv(dataset_dir: Path, spec: DatasetFileSpec) -> pd.DataFrame:
