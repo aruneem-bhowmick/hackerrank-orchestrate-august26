@@ -272,8 +272,17 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   Messages API. See ADR-007 for the full rationale and implementation notes.
 - **ADR-002** (2026-08-01): ASR engine choice — OpenAI's Whisper transcription
   API. See ADR-007 for the full rationale and implementation notes.
-- **ADR-003** (pending): Text similarity method for retrieval (embeddings vs.
-  TF-IDF) — likely driven by time budget once actual dataset volume is known.
+- **ADR-003** (2026-08-01): Text similarity for evidence retrieval uses a
+  deterministic, in-process TF-IDF cosine scorer. Alternatives considered:
+  (a) hosted embeddings — rejected because the 412-row historical corpus is
+  small, lexical relevance is sufficient for the English-language examples,
+  and a hosted dependency would add latency, cost, a secret, and a failure
+  mode to a retrieval step that must remain reproducible; (b) a fixed
+  keyword-overlap score — rejected because it overweights common words and
+  cannot distinguish a meaningful shared term from boilerplate. The scorer
+  is fit only against the receiving user's own timeline for each retrieval,
+  tokenizes deterministically, and combines its similarity with an explicit
+  same-sender/business/group match; identity alone can never select evidence.
 - **ADR-004** (pending): Confidence formula weights — to be tuned against
   `sample_messages.csv` behavior.
 - **ADR-005** (2026-08-01): P0's output contract is a `DatasetBundle` of
