@@ -1,7 +1,7 @@
 """Unit tests for receiver-scoped dual-signal evidence retrieval."""
 
 from router.ingestion.message import NormalizedMessage
-from router.personalization.evidence import EvidenceBundle, evidence_ids_for_output
+from router.personalization.evidence import EvidenceBundle, evidence_ids_for_output, no_evidence_bundle
 from router.personalization.retrieval import retrieve_evidence
 from router.personalization.similarity import tfidf_cosine_similarity
 
@@ -49,3 +49,13 @@ def test_empty_evidence_serializes_to_none() -> None:
     """REQ-P3-04: an empty bundle renders the required non-fabricated sentinel."""
     bundle = EvidenceBundle("incoming", (), "no relevant historical evidence", "source_and_tfidf", {})
     assert evidence_ids_for_output(bundle) == "none"
+
+
+def test_no_evidence_bundle_preserves_id_and_signal_mapping() -> None:
+    """REQ-P3-04: the no-match factory retains the message and score inputs."""
+    signals = {"value_score_adjustment": -0.25, "urgency_score_adjustment": 0.0}
+    bundle = no_evidence_bundle("incoming", signals)
+    assert bundle.message_id == "incoming"
+    assert bundle.evidence_ids == ()
+    assert bundle.retrieval_method == "none"
+    assert bundle.personalization_signals is signals

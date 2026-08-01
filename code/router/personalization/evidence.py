@@ -11,6 +11,7 @@ class RetrievalResult:
     evidence_ids: tuple[str, ...]
     evidence_basis: str
     mean_relevance: float
+    retrieval_method: str
 
 
 @dataclass(frozen=True)
@@ -30,7 +31,18 @@ class EvidenceBundle:
 
 def no_evidence_result() -> RetrievalResult:
     """Create the single canonical result for a genuine retrieval miss."""
-    return RetrievalResult((), "no relevant historical evidence", 0.0)
+    return RetrievalResult((), "no relevant historical evidence", 0.0, "none")
+
+
+def no_evidence_bundle(message_id: str, signals: Mapping[str, object]) -> EvidenceBundle:
+    """Create the canonical no-match bundle without dropping receiver signals."""
+    return EvidenceBundle(
+        message_id,
+        (),
+        "no relevant historical evidence",
+        "none",
+        signals,
+    )
 
 
 def evidence_ids_for_output(bundle: EvidenceBundle) -> str:

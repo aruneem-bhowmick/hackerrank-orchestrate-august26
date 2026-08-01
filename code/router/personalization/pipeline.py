@@ -6,7 +6,7 @@ from router.dataset.loader import DatasetBundle
 from router.dataset.timeline import UserTimeline
 from router.errors import PersonalizationError
 from router.ingestion.message import NormalizedMessage
-from router.personalization.evidence import EvidenceBundle
+from router.personalization.evidence import EvidenceBundle, no_evidence_bundle
 from router.personalization.retrieval import retrieve_evidence
 from router.personalization.signals import apply_score_adjustments, build_personalization_signals
 
@@ -16,12 +16,27 @@ def personalize_message(message: NormalizedMessage, bundle: DatasetBundle, timel
     signals = build_personalization_signals(message, bundle, timeline)
     result = retrieve_evidence(message, timeline)
     adjusted = apply_score_adjustments(signals, len(result.evidence_ids), result.mean_relevance)
-    return EvidenceBundle(message.message_id, result.evidence_ids, result.evidence_basis, "source_and_tfidf", adjusted)
+    if not result.evidence_ids:
+        return no_evidence_bundle(message.message_id, adjusted)
+    return EvidenceBundle(message.message_id, result.evidence_ids, result.evidence_basis, result.retrieval_method, adjusted)
 
 
 def run_personalization(normalized: Mapping[str, NormalizedMessage], bundle: DatasetBundle, timelines: UserTimeline) -> dict[str, EvidenceBundle]:
     """Return exactly one receiver-scoped Evidence Bundle per normalized message."""
+    _validate_identifier_parity(normalized)
     bundles = {message_id: personalize_message(message, bundle, timelines.get(message.user_id, [])) for message_id, message in normalized.items()}
     if len(bundles) != len(normalized):
         raise PersonalizationError(f"run_personalization produced {len(bundles)} bundle(s) for {len(normalized)} normalized message(s).")
     return bundles
+
+
+def _validate_identifier_parity(normalized: Mapping[str, NormalizedMessage]) -> None:
+    """Reject duplicate internal ids and mapping keys that do not match them."""
+    message_ids = [message.message_id for message in normalized.values()]
+    if len(set(message_ids)) != len(message_ids):
+        raise PersonalizationError("normalized messages contain duplicate message_id values.")
+    for key, message in normalized.items():
+        if key != message.message_id:
+            raise PersonalizationError(
+                f"normalized mapping key '{key}' does not match message_id '{message.message_id}'."
+            )

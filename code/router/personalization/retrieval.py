@@ -30,7 +30,7 @@ def retrieve_evidence(message: NormalizedMessage, timeline: Sequence[Mapping[str
     ids = tuple(str(row["message_id"]) for row, _, _ in selected)
     bases = ", ".join(sorted({basis for _, basis, _ in selected}))
     mean = round(sum(score for _, _, score in selected) / len(selected), 6)
-    return RetrievalResult(ids, f"{bases} with TF-IDF text relevance", mean)
+    return RetrievalResult(ids, f"{bases} with TF-IDF text relevance", mean, "source_and_tfidf")
 
 
 def _source_basis(message: NormalizedMessage, history: Mapping[str, object]) -> str | None:

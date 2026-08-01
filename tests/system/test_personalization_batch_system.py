@@ -2,6 +2,8 @@
 
 from router.ingestion.message import NormalizedMessage
 from router.personalization.pipeline import run_personalization
+from router.errors import PersonalizationError
+import pytest
 
 
 def _message(message_id: str, user_id: str, text: str) -> NormalizedMessage:
@@ -20,3 +22,16 @@ def test_two_receivers_cannot_share_historical_evidence(load_fixture_bundle) -> 
     result = run_personalization(normalized, bundle, timelines)
     assert result["a"].evidence_ids == ("only_u1",)
     assert result["b"].evidence_ids == ()
+
+
+def test_batch_rejects_duplicate_internal_message_ids() -> None:
+    """REQ-P3-01: identifier parity rejects duplicated values before scoring."""
+    normalized = {"first": _message("first", "u_001", "one"), "second": _message("first", "u_002", "two")}
+    with pytest.raises(PersonalizationError, match="duplicate message_id"):
+        run_personalization(normalized, None, {})
+
+
+def test_batch_rejects_mapping_keys_that_differ_from_message_ids() -> None:
+    """REQ-P3-01: identifier parity rejects a key/id mismatch before scoring."""
+    with pytest.raises(PersonalizationError, match="does not match"):
+        run_personalization({"wrong": _message("right", "u_001", "one")}, None, {})
