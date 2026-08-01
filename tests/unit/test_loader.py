@@ -34,3 +34,11 @@ def test_load_csv_raises_on_missing_file():
     spec = DatasetFileSpec("does_not_exist.csv", ())
     with pytest.raises(DatasetSchemaError, match="does_not_exist.csv"):
         _load_csv(FIXTURES_DIR, spec)
+
+
+def test_load_csv_raises_dataset_schema_error_on_empty_file(tmp_path):
+    """A zero-byte CSV raises DatasetSchemaError, not a raw pandas exception."""
+    (tmp_path / "empty.csv").write_text("")
+    spec = DatasetFileSpec("empty.csv", ())
+    with pytest.raises(DatasetSchemaError, match="empty.csv"):
+        _load_csv(tmp_path, spec)

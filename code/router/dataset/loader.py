@@ -89,7 +89,7 @@ def _load_csv(dataset_dir: Path, spec: DatasetFileSpec) -> pd.DataFrame:
 
     try:
         frame = pd.read_csv(path, dtype=str, keep_default_na=False)
-    except pd.errors.ParserError as exc:
+    except (pd.errors.ParserError, pd.errors.EmptyDataError) as exc:
         raise DatasetSchemaError(
             f"Could not parse '{spec.filename}' at '{path}': {exc}"
         ) from exc
