@@ -1,0 +1,3 @@
+user_id,do_not_disturb_window,messages_opened_30d,messages_replied_30d,notifications_dismissed_30d,messages_reported_30d
+u_001,22:00-07:00,10,2,3,0
+u_002,23:00-08:00,15,5,1,0

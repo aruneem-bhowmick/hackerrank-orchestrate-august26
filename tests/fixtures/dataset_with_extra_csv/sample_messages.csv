@@ -1,0 +1,2 @@
+message_id,user_id,conversation_type,group_id,business_id,sender_user_id,created_at,message_text,media_type,media_id,forwarded_count,action,message_type,reason,confidence,evidence_message_ids
+sample_test_001,u_001,group,group_001,,u_002,2026-07-30 09:00,Sample heads up message.,,,0,notify,event,A trusted group admin sent a time-sensitive update.,0.85,hist_0001
