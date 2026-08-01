@@ -39,6 +39,19 @@ def test_find_suspicious_files_matches_case_insensitively(tmp_path):
     assert [path.name for path in matches] == ["GROUND_TRUTH.csv"]
 
 
+def test_find_suspicious_files_does_not_flag_a_pattern_embedded_in_a_longer_word(tmp_path):
+    """A pattern occurring only as a substring of an unrelated word is not a match."""
+    (tmp_path / "marigold_notes.csv").write_text("note\n")
+    assert find_suspicious_files(tmp_path, tmp_path / "dataset") == []
+
+
+def test_find_suspicious_files_still_matches_a_multi_token_pattern(tmp_path):
+    """A multi-word pattern still matches when its tokens appear contiguously."""
+    (tmp_path / "ground_truth_labels.csv").write_text("message_id,action\n")
+    matches = find_suspicious_files(tmp_path, tmp_path / "dataset")
+    assert [path.name for path in matches] == ["ground_truth_labels.csv"]
+
+
 def test_find_suspicious_files_does_not_flag_a_suspicious_directory_name(tmp_path):
     """Only file names are checked against suspicious patterns, not directory names."""
     suspicious_dir = tmp_path / "ground_truth_archive"

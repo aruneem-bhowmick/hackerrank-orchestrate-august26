@@ -7,9 +7,12 @@ organizer-only or hidden ground-truth file. Either kind of violation halts
 the run rather than being logged and skipped.
 """
 
+import re
 from pathlib import Path
 
 from router.errors import DatasetIntegrityError
+
+_TOKEN_SPLIT_RE = re.compile(r"[^a-z0-9]+")
 
 SUSPICIOUS_NAME_PATTERNS: tuple[str, ...] = (
     "ground_truth",
@@ -43,6 +46,26 @@ DEFAULT_EXCLUDED_DIR_NAMES: frozenset[str] = frozenset(
 FIXTURES_EXCLUDED_PATH: Path = Path("tests/fixtures")
 
 
+def _matches_suspicious_pattern(stem: str) -> bool:
+    """Return True if stem contains a SUSPICIOUS_NAME_PATTERNS phrase as whole tokens.
+
+    Tokenizes the stem on non-alphanumeric characters and requires each
+    pattern (itself underscore-joined for multi-word phrases) to appear as
+    a contiguous run of whole tokens, so a pattern embedded inside an
+    unrelated longer word (e.g. "gold" inside "marigold") does not match.
+    """
+    tokens = [token for token in _TOKEN_SPLIT_RE.split(stem.lower()) if token]
+    for pattern in SUSPICIOUS_NAME_PATTERNS:
+        pattern_tokens = pattern.split("_")
+        window = len(pattern_tokens)
+        if any(
+            tokens[i : i + window] == pattern_tokens
+            for i in range(len(tokens) - window + 1)
+        ):
+            return True
+    return False
+
+
 def find_disallowed_dataset_files(dataset_dir: Path, allowlist: frozenset[str]) -> list[Path]:
     """Return every *.csv file directly under dataset_dir not in allowlist."""
     return sorted(
@@ -72,8 +95,7 @@ def find_suspicious_files(repo_root: Path, dataset_dir: Path) -> list[Path]:
         relative_dir_parts = relative_path.parent.parts
         if any(part in DEFAULT_EXCLUDED_DIR_NAMES for part in relative_dir_parts):
             continue
-        stem = path.stem.lower()
-        if any(pattern in stem for pattern in SUSPICIOUS_NAME_PATTERNS):
+        if _matches_suspicious_pattern(path.stem):
             matches.append(path)
     return sorted(matches, key=lambda path: str(path))
 
