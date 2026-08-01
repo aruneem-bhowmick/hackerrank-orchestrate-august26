@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 from router.dataset.loader import DatasetBundle
 from router.decision.confidence import compute_confidence, compute_signal_agreement
+from router.decision.content_signals import detect_content_urgency
 from router.decision.fusion import fuse_action
 from router.decision.message_type import select_message_type
 from router.decision.reason import build_reason
@@ -96,7 +97,8 @@ def _build_decision_record(
 ) -> DecisionRecord:
     """Assemble one message's full DecisionRecord from every prior stage's output."""
     signals = evidence.personalization_signals
-    fusion = fuse_action(message_id, verdict, signals)
+    content_urgency = detect_content_urgency(message.normalized_text)
+    fusion = fuse_action(message_id, verdict, signals, content_urgency)
     confidence = compute_confidence(verdict, signals)
     message_type = select_message_type(verdict, fusion.action, message, signals, business, forwarded_count)
     agreement = compute_signal_agreement(verdict, signals)

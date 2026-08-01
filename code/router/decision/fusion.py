@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from router.decision.thresholds import (
     BASE_SCORE,
     BORDERLINE_RISK_PENALTY_WEIGHT,
+    CONTENT_URGENCY_BOOST,
     T_DIGEST,
     T_NOTIFY,
 )
@@ -21,19 +22,30 @@ from router.safety.verdict import SafetyVerdict
 
 
 def fuse_action(
-    message_id: str, verdict: SafetyVerdict, signals: Mapping[str, object]
+    message_id: str,
+    verdict: SafetyVerdict,
+    signals: Mapping[str, object],
+    content_urgency: bool = False,
 ) -> FusionResult:
     """Deterministically fuse a safety verdict and personalization signals
     into one FusionResult.
 
     signals is one EvidenceBundle's personalization_signals mapping (see
-    router.personalization.signals.apply_score_adjustments). Raises
-    nothing for well-formed input; a missing key in signals is a
-    programming error in the caller, not a data condition this function
-    should mask.
+    router.personalization.signals.apply_score_adjustments).
+    content_urgency is the caller-computed result of
+    router.decision.content_signals.detect_content_urgency on the
+    message's own normalized_text — this is the genuine, message-content
+    urgency input REQ-P4-01 names separately from "personalization score",
+    distinct from personalization's context-only urgency_score_adjustment
+    (quiet hours, group mute, mention override). Raises nothing for
+    well-formed input; a missing key in signals is a programming error in
+    the caller, not a data condition this function should mask.
     """
     value_score = _bound01(BASE_SCORE + float(signals["value_score_adjustment"]))
-    urgency_score = _bound01(BASE_SCORE + float(signals["urgency_score_adjustment"]))
+    urgency_score = BASE_SCORE + float(signals["urgency_score_adjustment"])
+    if content_urgency:
+        urgency_score += CONTENT_URGENCY_BOOST
+    urgency_score = _bound01(urgency_score)
 
     borderline = verdict.risk_type is not None and not verdict.is_blocked
     if borderline:
@@ -41,7 +53,7 @@ def fuse_action(
         value_score = _bound01(value_score - penalty)
         urgency_score = _bound01(urgency_score - penalty)
 
-    decision_basis = _build_decision_basis(verdict, signals, borderline)
+    decision_basis = _build_decision_basis(verdict, signals, borderline, content_urgency)
 
     if verdict.is_blocked:
         action = "mute"
@@ -65,7 +77,10 @@ def fuse_action(
 
 
 def _build_decision_basis(
-    verdict: SafetyVerdict, signals: Mapping[str, object], borderline: bool
+    verdict: SafetyVerdict,
+    signals: Mapping[str, object],
+    borderline: bool,
+    content_urgency: bool,
 ) -> tuple[str, ...]:
     """Name every component that actually contributed to this decision.
 
@@ -86,6 +101,8 @@ def _build_decision_basis(
     elif group_muted:
         basis.append("group_muted_suppressed")
 
+    if content_urgency:
+        basis.append("content_urgency_signal")
     if signals["quiet_hours"]:
         basis.append("quiet_hours_suppressed")
     if float(signals["dismissal_penalty"]) < 0:

@@ -10,6 +10,7 @@ business-mute label, then deterministic content classification.
 import re
 from collections.abc import Mapping
 
+from router.decision.content_signals import detect_content_urgency
 from router.errors import DecisionFusionError
 from router.ingestion.message import NormalizedMessage
 from router.safety.thresholds import FORWARD_CHAIN_COUNT_THRESHOLD
@@ -35,24 +36,23 @@ or invented from; see validate_message_type."""
 
 _GREETING_PATTERN = re.compile(
     r"good morning|good evening|stay positive|keep smiling|"
-    r"share blessings|no need to (?:respond|reply)|forwarding because it felt nice|"
+    r"share blessings|forwarding because it felt nice|"
     r"sending good vibes|hope today is peaceful",
     re.IGNORECASE,
 )
+"""Blessing/well-wish language only — "no need to respond" was dropped after
+calibration showed it also fires on ordinary non-greeting group notices that
+simply do not require acknowledgment (e.g. a form/circular announcement)."""
 
 _EVENT_PATTERN = re.compile(
-    r"\bcircular\b|\bschedule\b|\btiming\b|\bpickup\b|\bform\b|\bappointment\b|"
+    r"\bcircular\b|\bschedule\b|\btiming\b|\bform\b|\bappointment\b|"
     r"\bbooking\b|cultural night|consent note|\bregistration\b|"
-    r"prescription|claim|delivery-code|leaving \d+ mins? early",
+    r"prescription|claim|leaving \d+ mins? early",
     re.IGNORECASE,
 )
-
-_URGENT_PATTERN = re.compile(
-    r"\basap\b|\burgent\b|immediately|before (?:eod|midnight)|"
-    r"\bescalat\w*|expire[sd]? today|within \d+ (?:minutes?|hours?)|"
-    r"in \d+ mins?|quick heads-up|retry count crossed",
-    re.IGNORECASE,
-)
+"""Schedule/logistics language. "pickup" and "delivery-code" were dropped
+after calibration showed both fire on item-for-sale/order-tracking content
+(message_type promotion/business_update), not on scheduled events."""
 
 _PAYMENT_PATTERN = re.compile(
     r"\binvoice\b|\bbill\b|\bdue\b|\bemi\b|\brefund\b|amount debited|"
@@ -65,6 +65,13 @@ _PROMOTION_PATTERN = re.compile(
     r"shopping offer|unsubscribe|reply stop",
     re.IGNORECASE,
 )
+
+_IMAGE_PICKUP_PATTERN = re.compile(r"\bpickup\b", re.IGNORECASE)
+""""pickup" alone is ambiguous — dataset/sample_messages.csv uses it both for
+a casual personal carpool chat (sample_msg_006, text-only) and for an
+item-for-sale collection arrangement (sample_msg_044/045/047, all image
+captions). Restricting this signal to image messages resolves that
+ambiguity without treating the bare word as reliable on its own."""
 
 
 def select_message_type(
@@ -115,20 +122,28 @@ def validate_message_type(raw: str) -> str:
 
 
 def _classify_content(message: NormalizedMessage, signals: Mapping[str, object]) -> str:
-    """Classify message.normalized_text into a coarse content-based message_type."""
+    """Classify message.normalized_text into a coarse content-based message_type.
+
+    A direct mention or a plain request for a response ("can you call?")
+    is not, by itself, treated as "urgent" — calibration against
+    dataset/sample_messages.csv showed a personal direct ask keeps
+    message_type "personal" even when it resolves to action "notify";
+    "urgent" is reserved for explicit deadline/escalation language (see
+    router.decision.content_signals.detect_content_urgency).
+    """
     text = message.normalized_text or ""
 
     if _GREETING_PATTERN.search(text):
         return "greeting"
     if _EVENT_PATTERN.search(text):
         return "event"
-    if _URGENT_PATTERN.search(text) or (
-        bool(signals["direct_mention"]) and _requests_response(text)
-    ):
+    if detect_content_urgency(text):
         return "urgent"
     if _PAYMENT_PATTERN.search(text):
         return "payment"
     if _PROMOTION_PATTERN.search(text):
+        return "promotion"
+    if message.media_type == "image" and _IMAGE_PICKUP_PATTERN.search(text):
         return "promotion"
 
     if message.conversation_type == "business":
@@ -136,11 +151,6 @@ def _classify_content(message: NormalizedMessage, signals: Mapping[str, object])
     if message.conversation_type == "personal" and int(signals["source_history_count"]) == 0:
         return "unknown"
     return "personal"
-
-
-def _requests_response(text: str) -> bool:
-    """Return whether a mentioned message also directly asks for a response."""
-    return bool(re.search(r"\bcan you\b|\bplease\b|\bwhen you get\b", text, re.IGNORECASE))
 
 
 __all__ = ["ALLOWED_MESSAGE_TYPES", "select_message_type", "validate_message_type"]
