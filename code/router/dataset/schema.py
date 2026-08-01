@@ -5,10 +5,15 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class DatasetFileSpec:
-    """Describes one dataset file's name and the columns it must contain."""
+    """Describes one dataset file: its name, required columns, and the
+    DatasetBundle attribute it fills. attribute is None for specs built
+    ad hoc (e.g. in tests exercising _load_csv directly) rather than
+    registered in DATASET_FILES.
+    """
 
     filename: str
     required_columns: tuple[str, ...]
+    attribute: str | None = None
 
 
 DATASET_FILES: tuple[DatasetFileSpec, ...] = (
@@ -27,6 +32,7 @@ DATASET_FILES: tuple[DatasetFileSpec, ...] = (
             "media_id",
             "forwarded_count",
         ),
+        attribute="messages",
     ),
     DatasetFileSpec(
         "output.csv",
@@ -38,6 +44,7 @@ DATASET_FILES: tuple[DatasetFileSpec, ...] = (
             "confidence",
             "evidence_message_ids",
         ),
+        attribute="output_template",
     ),
     DatasetFileSpec(
         "sample_messages.csv",
@@ -59,6 +66,7 @@ DATASET_FILES: tuple[DatasetFileSpec, ...] = (
             "confidence",
             "evidence_message_ids",
         ),
+        attribute="sample_messages",
     ),
     DatasetFileSpec(
         "users.csv",
@@ -70,6 +78,7 @@ DATASET_FILES: tuple[DatasetFileSpec, ...] = (
             "notifications_dismissed_30d",
             "messages_reported_30d",
         ),
+        attribute="users",
     ),
     DatasetFileSpec(
         "groups.csv",
@@ -82,6 +91,7 @@ DATASET_FILES: tuple[DatasetFileSpec, ...] = (
             "created_at",
             "messages_30d",
         ),
+        attribute="groups",
     ),
     DatasetFileSpec(
         "group_members.csv",
@@ -96,6 +106,7 @@ DATASET_FILES: tuple[DatasetFileSpec, ...] = (
             "notifications_dismissed_30d",
             "group_muted_by_user",
         ),
+        attribute="group_members",
     ),
     DatasetFileSpec(
         "business_accounts.csv",
@@ -112,6 +123,7 @@ DATASET_FILES: tuple[DatasetFileSpec, ...] = (
             "user_reports_30d",
             "domain_used_by_sender_age_days",
         ),
+        attribute="business_accounts",
     ),
     DatasetFileSpec(
         "user_business_history.csv",
@@ -128,6 +140,7 @@ DATASET_FILES: tuple[DatasetFileSpec, ...] = (
             "messages_replied_30d",
             "last_reply_at",
         ),
+        attribute="user_business_history",
     ),
     DatasetFileSpec(
         "message_history.csv",
@@ -144,6 +157,7 @@ DATASET_FILES: tuple[DatasetFileSpec, ...] = (
             "media_id",
             "forwarded_count",
         ),
+        attribute="message_history",
     ),
     DatasetFileSpec(
         "message_events.csv",
@@ -157,12 +171,14 @@ DATASET_FILES: tuple[DatasetFileSpec, ...] = (
             "muted_after_message",
             "message_reported",
         ),
+        attribute="message_events",
     ),
-    DatasetFileSpec("images.csv", ("image_id", "file_path")),
-    DatasetFileSpec("voice_notes.csv", ("voice_note_id", "file_path")),
+    DatasetFileSpec("images.csv", ("image_id", "file_path"), attribute="images"),
+    DatasetFileSpec("voice_notes.csv", ("voice_note_id", "file_path"), attribute="voice_notes"),
     DatasetFileSpec(
         "daily_notification_summary.csv",
         ("user_id", "date", "notifications_sent", "notifications_dismissed"),
+        attribute="daily_notification_summary",
     ),
 )
 

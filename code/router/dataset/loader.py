@@ -29,23 +29,6 @@ class DatasetBundle:
     daily_notification_summary: pd.DataFrame
 
 
-_ATTRIBUTE_BY_FILENAME = {
-    "messages.csv": "messages",
-    "output.csv": "output_template",
-    "sample_messages.csv": "sample_messages",
-    "users.csv": "users",
-    "groups.csv": "groups",
-    "group_members.csv": "group_members",
-    "business_accounts.csv": "business_accounts",
-    "user_business_history.csv": "user_business_history",
-    "message_history.csv": "message_history",
-    "message_events.csv": "message_events",
-    "images.csv": "images",
-    "voice_notes.csv": "voice_notes",
-    "daily_notification_summary.csv": "daily_notification_summary",
-}
-
-
 def load_dataset_bundle(
     dataset_dir: str | Path, repo_root: str | Path | None = None
 ) -> DatasetBundle:
@@ -72,10 +55,7 @@ def load_dataset_bundle(
         allowlist=DATASET_ALLOWLIST,
     )
 
-    loaded = {
-        _ATTRIBUTE_BY_FILENAME[spec.filename]: _load_csv(dataset_path, spec)
-        for spec in DATASET_FILES
-    }
+    loaded = {spec.attribute: _load_csv(dataset_path, spec) for spec in DATASET_FILES}
     return DatasetBundle(**loaded)
 
 
