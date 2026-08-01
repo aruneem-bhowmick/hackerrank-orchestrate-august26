@@ -15,3 +15,7 @@ class DatasetIntegrityError(DatasetError):
 
 class TimelineJoinError(DatasetError):
     """Raised when message_history and message_events cannot be joined consistently."""
+
+
+class RowCountParityError(DatasetError):
+    """Raised when messages.csv and output.csv row counts or message_id sets disagree."""
