@@ -1,7 +1,9 @@
 """Unit tests for the aggregate forward-chain open-rate statistic."""
 
 import pandas as pd
+import pytest
 
+from router.errors import SafetyGateError
 from router.safety.gate import compute_forward_chain_open_rate
 
 _HISTORY_COLUMNS = ["message_id", "user_id", "forwarded_count"]
@@ -64,3 +66,19 @@ def test_rows_without_a_matching_event_are_excluded_from_the_rate():
     history = _history([("h1", "u_1", "8"), ("h2", "u_1", "9")])
     events = _events([("h1", "u_1", "1")])  # h2 has no matching event row
     assert compute_forward_chain_open_rate(history, events) == 1.0
+
+
+def test_duplicate_message_id_in_message_events_raises_instead_of_fanning_out():
+    """A repeated message_id on the events side would otherwise silently fan out the join."""
+    history = _history([("h1", "u_1", "8")])
+    events = _events([("h1", "u_1", "1"), ("h1", "u_1", "0")])
+    with pytest.raises(SafetyGateError, match="message_events has duplicate message_id"):
+        compute_forward_chain_open_rate(history, events)
+
+
+def test_duplicate_message_id_in_message_history_raises_instead_of_fanning_out():
+    """A repeated message_id on the history side would otherwise silently fan out the join."""
+    history = _history([("h1", "u_1", "8"), ("h1", "u_1", "9")])
+    events = _events([("h1", "u_1", "1")])
+    with pytest.raises(SafetyGateError, match="message_history has duplicate message_id"):
+        compute_forward_chain_open_rate(history, events)

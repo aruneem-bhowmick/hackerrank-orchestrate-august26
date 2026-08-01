@@ -94,6 +94,19 @@ def _parse_forwarded_count(raw: str) -> int:
     return int(raw) if raw.strip().isdigit() else 0
 
 
+def _raise_on_duplicate_message_id(frame: pd.DataFrame, frame_name: str) -> None:
+    """Raise SafetyGateError if message_id is not unique in frame.
+
+    A duplicate would otherwise fan out silently: an inner join on
+    message_id would multiply that message's row(s) on the other side,
+    over-weighting its contribution to the aggregate open-rate mean.
+    """
+    duplicate_ids = frame["message_id"][frame["message_id"].duplicated()]
+    if not duplicate_ids.empty:
+        ids = ", ".join(sorted(duplicate_ids.unique()))
+        raise SafetyGateError(f"{frame_name} has duplicate message_id(s): {ids}")
+
+
 def compute_forward_chain_open_rate(
     message_history: pd.DataFrame, message_events: pd.DataFrame
 ) -> float | None:
@@ -107,8 +120,14 @@ def compute_forward_chain_open_rate(
     the forwarded_count filter (undefined rate, not zero). This aggregates
     across every user and sender in the historical data, not any one
     receiving user's own history, so it stays user-independent. Intended
-    to be called once per run, not once per message.
+    to be called once per run, not once per message. Raises
+    SafetyGateError if either input has more than one row per message_id
+    — an inner join on message_id would otherwise fan out and silently
+    over-weight that message's contribution to the aggregate.
     """
+    _raise_on_duplicate_message_id(message_history, "message_history")
+    _raise_on_duplicate_message_id(message_events, "message_events")
+
     merged = message_history.merge(message_events, on="message_id", how="inner")
     high_forward = merged[
         merged["forwarded_count"].apply(_parse_forwarded_count) >= FORWARD_CHAIN_COUNT_THRESHOLD
