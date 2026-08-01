@@ -39,6 +39,47 @@ P0 Data Load/Validate
 
 ## 1. Data Contracts
 
+### 1.0 Internal — Loaded Dataset Bundle & Per-User Timeline (output of P0)
+
+P0 loads and validates all 13 dataset files (per `AGENTS.md` §6.1) and hands
+the following two structures to every downstream phase. No later phase
+re-reads a CSV from disk directly — all phases consume these structures.
+
+```
+DatasetBundle = {
+  messages: DataFrame,                 # dataset/messages.csv (read-only)
+  users: DataFrame,
+  groups: DataFrame,
+  group_members: DataFrame,
+  business_accounts: DataFrame,
+  user_business_history: DataFrame,
+  message_history: DataFrame,
+  message_events: DataFrame,
+  images: DataFrame,
+  voice_notes: DataFrame,
+  daily_notification_summary: DataFrame,
+  sample_messages: DataFrame,          # calibration only, per REQ-P5-02
+  output_template: DataFrame,          # dataset/output.csv, shape reference
+                                        # only, for REQ-P0-04 / REQ-P5-01
+}
+
+UserTimeline = {
+  user_id: [
+    {
+      message_id, conversation_type, group_id, business_id, sender_user_id,
+      created_at, message_text, media_type, media_id, forwarded_count,
+      message_opened, message_replied, reaction_time_minutes,
+      notification_dismissed, muted_after_message, message_reported,
+    },
+    ...  # sorted by created_at ascending
+  ]
+}
+```
+
+`UserTimeline` is the join of `message_history.csv` + `message_events.csv`
+on `message_id` and is scoped per user for REQ-P3-01 (no cross-user
+leakage). It is what P3 indexes for retrieval.
+
 ### 1.1 Input (from `dataset/messages.csv`)
 Per `problem_statement.md` §Input schema — treat as read-only, do not mutate.
 
@@ -226,13 +267,37 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   TF-IDF) — likely driven by time budget once actual dataset volume is known.
 - **ADR-004** (pending): Confidence formula weights — to be tuned against
   `sample_messages.csv` behavior.
+- **ADR-005** (2026-08-01): P0's output contract is a `DatasetBundle` of
+  in-memory DataFrames (one per input file) plus a `UserTimeline` dict keyed
+  by `user_id`, joining `message_history.csv` + `message_events.csv` on
+  `message_id`. Alternatives considered: (a) let each phase re-read CSVs
+  itself — rejected, it would let a later phase bypass load-time validation
+  and violate REQ-P0-01's "before processing any message" gate; (b) a single
+  flat joined table instead of a dict-of-DataFrames — rejected, downstream
+  phases need per-file semantics (e.g. P1 needs `business_accounts`
+  independent of any one message). Confirmed via inspection:
+  `message_history.csv`/`message_events.csv` join 1:1 cleanly on
+  `message_id` (412 rows each, no duplicates, no orphans either direction,
+  `user_id` agrees on every shared row), so no fallback join strategy is
+  needed.
 
 ---
 
 ## 6. Open Questions (resolve once Claude Code has inspected the actual dataset)
 
-- Actual row counts / message volume — affects whether embeddings or TF-IDF
-  is the right retrieval choice within the time budget.
-- Distribution of `media_type` — affects how much OCR/ASR effort is justified.
-- Whether `sample_messages.csv` reason strings imply a house style worth
-  matching exactly (tone, length) for the `reason` scoring criterion.
+- **Resolved (2026-08-01)** — Actual row counts / message volume:
+  `messages.csv` = 110 rows, `message_history.csv` = 412 rows,
+  `message_events.csv` = 412 rows (1:1 join on `message_id`, no orphans
+  either direction). At this volume, lexical retrieval (TF-IDF) comfortably
+  fits the time budget and embeddings are not required for adequate recall;
+  ADR-003 should default to TF-IDF unless P3 implementation finds recall is
+  inadequate in practice.
+- **Resolved (2026-08-01)** — `media_type` distribution: in `messages.csv`
+  (110 rows) 87 are text/blank, 15 `image`, 8 `voice`; in
+  `message_history.csv` (412 rows) 389 text/blank, 19 `image`, 4 `voice`.
+  Media is a small minority of volume, so P2 OCR/ASR effort should
+  prioritize correctness and graceful fallback over throughput.
+- **Open** — Whether `sample_messages.csv` reason strings imply a house
+  style worth matching exactly (tone, length) for the `reason` scoring
+  criterion — deferred to P4/P5 when `reason` generation is implemented;
+  does not block P0.

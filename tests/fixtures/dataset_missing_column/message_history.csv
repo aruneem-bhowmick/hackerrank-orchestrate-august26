@@ -1,0 +1,4 @@
+message_id,user_id,conversation_type,group_id,business_id,sender_user_id,created_at,message_text,media_type,media_id,forwarded_count
+hist_0001,u_001,group,group_001,,u_002,2026-06-01 09:00,Morning update for the family.,,,0
+hist_0002,u_001,business,,business_001,,2026-06-05 12:00,Your order has shipped.,,,0
+hist_0003,u_002,personal,,,u_001,2026-06-10 08:00,Hey are you free later?,,,0

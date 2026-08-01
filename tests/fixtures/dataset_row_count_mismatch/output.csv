@@ -1,0 +1,4 @@
+message_id,action,message_type,reason,confidence,evidence_message_ids
+msg_test_001,,,,,
+msg_test_002,,,,,
+msg_extra_001,,,,,
