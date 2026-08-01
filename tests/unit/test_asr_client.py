@@ -7,6 +7,7 @@ import pytest
 
 from router.errors import ASRClientError
 from router.ingestion import asr
+from router.ingestion.pipeline import normalize_message
 
 
 def _response(text: str, segments: list[object]) -> SimpleNamespace:
@@ -31,6 +32,59 @@ def test_asr_response_parser_derives_confidence_from_segment_log_probabilities()
     assert result.text == "Schedule the meeting tomorrow."
     assert result.confidence == pytest.approx(0.7)
     assert result.failure is False
+
+
+@pytest.mark.parametrize(
+    "segment",
+    [SimpleNamespace(no_speech_prob=0.1), SimpleNamespace(avg_logprob=None, no_speech_prob=0.1)],
+)
+def test_asr_response_parser_maps_missing_or_null_segment_metrics_to_client_errors(segment):
+    """Malformed verbose responses use the typed client error consumed by the pipeline."""
+    with pytest.raises(ASRClientError, match="usable 'avg_logprob'"):
+        asr._asr_result_from_response(_response("Transcript", [segment]))
+
+
+def test_voice_normalization_turns_a_malformed_asr_response_into_a_fallback(
+    load_fixture_bundle, fixtures_dir
+):
+    """A parser error from the ASR boundary cannot abort normalization of the voice row."""
+    bundle = load_fixture_bundle("dataset_valid")
+
+    class MalformedResponseClient:
+        """ASR test double whose response parser encounters a missing required metric."""
+
+        def transcribe(self, audio_path):
+            """Parse malformed verbose data through the same client-side response parser."""
+            return asr._asr_result_from_response(
+                _response("Transcript", [SimpleNamespace(no_speech_prob=0.1)])
+            )
+
+    message = {
+        "message_id": "voice_malformed",
+        "user_id": "u_1",
+        "conversation_type": "personal",
+        "group_id": "",
+        "business_id": "",
+        "sender_user_id": "u_2",
+        "created_at": "2026-08-01 10:00",
+        "message_text": "",
+        "media_type": "voice",
+        "media_id": "vn_test_001",
+        "forwarded_count": "0",
+    }
+
+    result = normalize_message(
+        message,
+        bundle,
+        fixtures_dir / "dataset_valid",
+        object(),
+        MalformedResponseClient(),
+    )
+
+    assert result.media_failure is True
+    assert result.media_confidence == 0.0
+    assert result.normalized_text == ""
+    assert result.media_failure_reason is not None
 
 
 @pytest.mark.parametrize(

@@ -99,24 +99,51 @@ def build_asr_client() -> ASRClient:
     return OpenAIWhisperASRClient(api_key=api_key)
 
 
-def _confidence_from_segments(segments: list) -> float:
+def _segment_float(segment: object, field: str) -> float:
+    """Return a finite numeric Whisper segment field or raise ASRClientError.
+
+    Whisper's verbose response is an external boundary. A missing, null,
+    non-numeric, or non-finite metric is malformed response data rather
+    than an unexpected Python exception for callers to handle.
+    """
+    try:
+        value = float(getattr(segment, field))
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise ASRClientError(
+            f"Whisper verbose_json segment is missing a usable '{field}': {exc}"
+        ) from exc
+    if not math.isfinite(value):
+        raise ASRClientError(f"Whisper verbose_json segment has a non-finite '{field}'.")
+    return value
+
+
+def _confidence_from_segments(segments: list[object]) -> float:
     """Mean of exp(avg_logprob) across segments, clamped to [0, 1]."""
     if not segments:
         return 0.0
-    scores = [max(0.0, min(1.0, math.exp(segment.avg_logprob))) for segment in segments]
+    try:
+        scores = [
+            max(0.0, min(1.0, math.exp(_segment_float(segment, "avg_logprob"))))
+            for segment in segments
+        ]
+    except OverflowError as exc:
+        raise ASRClientError("Whisper verbose_json segment has an unusable 'avg_logprob'.") from exc
     return sum(scores) / len(scores)
 
 
-def _mean_no_speech_prob(segments: list) -> float:
+def _mean_no_speech_prob(segments: list[object]) -> float:
     """Mean no_speech_prob across segments; 1.0 (fully non-speech) when there are none."""
     if not segments:
         return 1.0
-    return sum(segment.no_speech_prob for segment in segments) / len(segments)
+    return sum(_segment_float(segment, "no_speech_prob") for segment in segments) / len(segments)
 
 
 def _asr_result_from_response(response: object) -> ASRResult:
     """Parse a Whisper verbose_json response into an ASRResult."""
-    segments = list(getattr(response, "segments", None) or [])
+    try:
+        segments = list(getattr(response, "segments", None) or [])
+    except TypeError as exc:
+        raise ASRClientError("Whisper verbose_json response has an invalid 'segments' value.") from exc
     text = str(getattr(response, "text", "") or "").strip()
 
     if not segments:
