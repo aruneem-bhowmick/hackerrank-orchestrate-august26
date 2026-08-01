@@ -28,5 +28,5 @@ def test_load_dataset_bundle_raises_on_missing_column(load_fixture_bundle):
 
 def test_load_dataset_bundle_raises_on_missing_file(load_fixture_bundle):
     """A missing dataset file fails the whole bundle load, naming the file."""
-    with pytest.raises(DatasetSchemaError, match="voice_notes.csv"):
+    with pytest.raises(DatasetSchemaError, match=r"voice_notes\.csv"):
         load_fixture_bundle("dataset_missing_file")

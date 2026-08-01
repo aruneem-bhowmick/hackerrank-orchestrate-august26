@@ -11,7 +11,7 @@ from router.errors import DatasetIntegrityError, DatasetSchemaError
 def test_extra_csv_and_broken_schema_raises_integrity_error_first(fixtures_dir):
     """A fixture broken both ways surfaces the integrity error, naming the extra file."""
     fixture_dir = fixtures_dir / "dataset_with_extra_csv"
-    with pytest.raises(DatasetIntegrityError, match="notes.csv"):
+    with pytest.raises(DatasetIntegrityError, match=r"notes\.csv"):
         load_dataset_bundle(fixture_dir, repo_root=fixture_dir)
 
 
@@ -30,7 +30,7 @@ def test_extra_csv_fixture_does_not_raise_schema_error(fixtures_dir):
 def test_ground_truth_file_outside_dataset_dir_raises(fixtures_dir):
     """A ground-truth-named file next to dataset/ halts the guard, naming it."""
     fixture_dir = fixtures_dir / "repo_with_ground_truth_file"
-    with pytest.raises(DatasetIntegrityError, match="ground_truth_labels.csv"):
+    with pytest.raises(DatasetIntegrityError, match=r"ground_truth_labels\.csv"):
         integrity.enforce_dataset_integrity(
             repo_root=fixture_dir,
             dataset_dir=fixture_dir / "dataset",
