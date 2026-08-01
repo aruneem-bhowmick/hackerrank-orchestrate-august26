@@ -1,0 +1,3 @@
+group_id,user_id,role,joined_at,messages_sent_30d,messages_read_30d,replies_sent_30d,notifications_dismissed_30d,group_muted_by_user
+group_001,u_001,admin,2023-01-01,2,10,1,0,0
+group_001,u_002,member,2023-02-01,1,8,0,1,0
