@@ -47,3 +47,7 @@ class ASRClientError(MediaIngestionError):
     found no speech, which is a normal ASRResult(failure=True), not an
     error.
     """
+
+
+class PersonalizationError(DatasetError):
+    """Raised when personalization cannot produce one bundle per message."""
