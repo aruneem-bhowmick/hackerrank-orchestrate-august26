@@ -46,19 +46,28 @@ _ATTRIBUTE_BY_FILENAME = {
 }
 
 
-def load_dataset_bundle(dataset_dir: str | Path) -> DatasetBundle:
+def load_dataset_bundle(
+    dataset_dir: str | Path, repo_root: str | Path | None = None
+) -> DatasetBundle:
     """Load and schema-validate all dataset files into a DatasetBundle.
 
-    Runs the dataset integrity guard first. Raises DatasetSchemaError if
-    any file is missing, unreadable, or missing a required column, and
-    DatasetIntegrityError (via the guard) if an organizer-only or hidden
-    ground-truth file is discoverable. Never returns a partially-populated
-    bundle: either every file loads and validates, or the call raises.
+    Runs the dataset integrity guard first, scanning repo_root (default:
+    dataset_dir's parent, correct for the real project layout where
+    dataset/ is a direct child of the repo root) for organizer-only or
+    hidden ground-truth files. Pass repo_root explicitly to scope that
+    scan to something other than the default, e.g. in a test where
+    dataset_dir's real parent is a shared fixtures directory unrelated to
+    this call. Raises DatasetSchemaError if any file is missing,
+    unreadable, or missing a required column, and DatasetIntegrityError
+    (via the guard) if an organizer-only or hidden ground-truth file is
+    discoverable. Never returns a partially-populated bundle: either every
+    file loads and validates, or the call raises.
     """
     dataset_path = Path(dataset_dir)
+    root_path = Path(repo_root) if repo_root is not None else dataset_path.parent
 
     integrity.enforce_dataset_integrity(
-        repo_root=dataset_path.parent,
+        repo_root=root_path,
         dataset_dir=dataset_path,
         allowlist=DATASET_ALLOWLIST,
     )
