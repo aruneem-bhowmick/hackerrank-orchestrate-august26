@@ -23,3 +23,27 @@ class RowCountParityError(DatasetError):
 
 class SafetyGateError(DatasetError):
     """Raised when the safety gate cannot produce a verdict for every message."""
+
+
+class MediaIngestionError(DatasetError):
+    """Raised when the media ingestion stage cannot produce a normalized message for every row."""
+
+
+class OCRClientError(MediaIngestionError):
+    """Raised when an OCR client cannot produce a result for an image.
+
+    Covers a missing API key, a network/API failure, or a response that
+    cannot be parsed — never raised for a well-formed response that simply
+    found no readable text, which is a normal OCRResult(failure=True), not
+    an error.
+    """
+
+
+class ASRClientError(MediaIngestionError):
+    """Raised when an ASR client cannot produce a result for a voice note.
+
+    Covers a missing API key, a network/API failure, or a response that
+    cannot be parsed — never raised for a well-formed response that simply
+    found no speech, which is a normal ASRResult(failure=True), not an
+    error.
+    """
