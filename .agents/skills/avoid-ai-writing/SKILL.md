@@ -11,8 +11,11 @@ specific human voice, not a mechanically sanitized draft.
 
 ## Choose a mode
 
-Use `rewrite` by default. Audit the text, return a rewritten version, summarize
-the important changes, then run one corrective audit on the rewrite.
+Use `rewrite` by default. Audit the text, return a rewritten version, and
+summarize the important changes. Then run one corrective audit on the
+rewrite: if it still finds a flagged pattern, apply a targeted correction
+for each one found and re-audit the corrected text. Return that corrected
+version as the final output, not the pre-correction draft.
 
 Use `detect` when the user says "detect," "flag only," "audit only," "just
 flag," "scan," or asks what patterns are present. Identify the passages and
@@ -36,8 +39,14 @@ Use an optional context hint to calibrate strictness:
 - `investor-email`: remove promotional language aggressively.
 - `casual`: fix only strong, distracting patterns.
 
-If the user asks to iterate, repeat the audit and rewrite once more at most.
-Stop after two total passes or when no meaningful patterns remain.
+If the user asks to iterate, behavior depends on the active mode. In
+`rewrite` mode, run the audit-and-rewrite cycle once more at most; the
+corrective pass described above counts as part of the first cycle, not as
+a separate iteration. In `detect` mode, iterating means re-running the
+audit only — never produce a rewrite. In `edit` mode, iterating means
+re-editing the file in place once more and re-reading it to verify. In
+every mode, stop after two total passes or when no meaningful patterns
+remain.
 
 ## Audit procedure
 
