@@ -11,6 +11,7 @@ from router.ingestion.message import NormalizedMessage
 
 _MENTION_TEMPLATE = r"(?<![a-z0-9_])@{user_id}(?![a-z0-9_])"
 _MAX_ADJUSTMENT = 1.0
+_MUTED_GROUP_URGENCY_PENALTY = -0.4
 
 
 def build_personalization_signals(message: NormalizedMessage, bundle: DatasetBundle, timeline: Sequence[Mapping[str, object]]) -> dict[str, object]:
@@ -75,16 +76,21 @@ def apply_score_adjustments(signals: dict[str, object], evidence_count: int, mea
     engagement_lift = 0.25 * float(signals["open_rate"]) + 0.25 * float(signals["reply_rate"]) if evidence_count else 0.0
     evidence_strength = min(0.25, evidence_count * mean_relevance * 0.12)
     quiet_hours_penalty = -0.25 if signals["quiet_hours"] else 0.0
+    group_muted_penalty = _MUTED_GROUP_URGENCY_PENALTY if signals["group_muted"] else 0.0
     mention_lift = 0.6 if signals["group_muted"] and signals["direct_mention"] else 0.0
     signals.update({
         "evidence_strength": round(evidence_strength, 6),
         "dismissal_penalty": round(dismissal_penalty, 6),
         "engagement_lift": round(engagement_lift, 6),
         "quiet_hours_penalty": quiet_hours_penalty,
+        "group_muted_penalty": group_muted_penalty,
         "mention_override_lift": mention_lift,
         "mention_override": bool(mention_lift),
         "value_score_adjustment": round(_bound(dismissal_penalty + engagement_lift + evidence_strength), 6),
-        "urgency_score_adjustment": round(_bound(quiet_hours_penalty + mention_lift), 6),
+        "urgency_score_adjustment": round(
+            _bound(quiet_hours_penalty + group_muted_penalty + mention_lift),
+            6,
+        ),
     })
     return signals
 
@@ -100,8 +106,12 @@ def _first_match(frame: pd.DataFrame, **conditions: str) -> Mapping[str, object]
 
 
 def _same_source(message: NormalizedMessage, row: Mapping[str, object]) -> bool:
-    """Return whether any nonblank sender, business, or group identity matches."""
-    return any(value and value == str(row.get(field, "")) for value, field in ((message.sender_user_id, "sender_user_id"), (message.business_id, "business_id"), (message.group_id, "group_id")))
+    """Match the most specific available sender, business, or group identity."""
+    if message.sender_user_id:
+        return message.sender_user_id == str(row.get("sender_user_id", ""))
+    if message.business_id:
+        return message.business_id == str(row.get("business_id", ""))
+    return bool(message.group_id) and message.group_id == str(row.get("group_id", ""))
 
 
 def _rate(rows: Sequence[Mapping[str, object]], field: str) -> float:
