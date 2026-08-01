@@ -21,10 +21,13 @@ _PAYMENT_REQUEST_NEGATION_PATTERN = re.compile(
 """Suppresses payment_or_credential_request when the message explicitly
 denies asking for one (e.g. a legitimate courier's "no payment or OTP is
 required" notice) — a bare keyword match would otherwise flag the
-negation itself as a request.
+negation itself as a request. Only suppresses a credential match whose
+own span overlaps a negation match (see _is_negated_credential_match) —
+every alternative here (e.g. "no ... otp", "otp is not required")
+necessarily contains the credential keyword it negates, so requiring
+span overlap rather than mere proximity means an unrelated negation
+elsewhere in the message can never clear a separate, genuine request.
 """
-
-_NEGATION_CONTEXT_CHARACTERS = 40
 
 _SCAM_TEXT_PATTERNS: tuple[tuple[str, float, re.Pattern, str, re.Pattern | None], ...] = (
     (
@@ -119,10 +122,19 @@ def detect_scam_signals(
 def _is_negated_credential_match(
     text: str, match: re.Match[str], negation_pattern: re.Pattern
 ) -> bool:
-    """Return whether a credential keyword belongs to a nearby negated statement."""
-    start = max(0, match.start() - _NEGATION_CONTEXT_CHARACTERS)
-    end = min(len(text), match.end() + _NEGATION_CONTEXT_CHARACTERS)
-    return negation_pattern.search(text[start:end]) is not None
+    """Return whether a credential keyword's own span overlaps a negation match.
+
+    A proximity window (e.g. "within N characters") would let an
+    unrelated negation elsewhere in the message clear a separate, genuine
+    request. Span overlap is precise: it only suppresses a match when the
+    negation phrase's own regex span structurally contains or touches the
+    credential keyword being negated, which every alternative in
+    _PAYMENT_REQUEST_NEGATION_PATTERN does by construction.
+    """
+    return any(
+        negation_match.start() < match.end() and match.start() < negation_match.end()
+        for negation_match in negation_pattern.finditer(text)
+    )
 
 
 def _detect_suspicious_link_or_domain(text: str, business: dict | None) -> list[RiskSignal]:

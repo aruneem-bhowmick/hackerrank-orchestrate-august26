@@ -58,6 +58,17 @@ def test_negation_only_suppresses_the_adjacent_credential_keyword():
     assert {signal.name for signal in matches} == {"payment_or_credential_request"}
 
 
+def test_negation_does_not_clear_an_unrelated_credential_request_nearby():
+    """A 'no OTP required' disclaimer cannot clear a separate, genuine password request."""
+    matches = detect_scam_signals(
+        "Please confirm your password now. No OTP required for verification, thanks.",
+        None,
+        frozenset(),
+    )
+
+    assert {signal.name for signal in matches} == {"payment_or_credential_request"}
+
+
 def test_qr_payment_fixture_detects_a_nonblocking_corroborating_signal():
     """A QR payment demand is recorded but cannot mute a message by itself."""
     case = next(case for case in SCAM_FIXTURES if case.name == "qr_code_payment_demand_alone")
