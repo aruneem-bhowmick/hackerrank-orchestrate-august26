@@ -93,7 +93,10 @@ Every message, regardless of original modality, is normalized to:
   normalized_text: str,       # message_text OR OCR/ASR transcript
   media_confidence: float,    # 1.0 for native text; OCR/ASR conf otherwise
   media_failure: bool,        # true if OCR/ASR could not produce usable text
-  media_category: str | null  # e.g. poster, screenshot, doc-photo, voice-note
+  media_category: str | null, # e.g. poster, screenshot, doc-photo, voice-note
+  media_failure_reason: str | null  # human-readable cause when media_failure
+                                     # is true; null otherwise (added by
+                                     # ADR-007, see §5)
 }
 ```
 
@@ -253,6 +256,7 @@ test category doesn't apply rather than omitting silently.
 | REQ-P1-01 | Unit | Same message, two synthetic users with different engagement history → identical safety verdict |
 | REQ-P1-04 | Integration | High-risk message + high-engagement sender history → still muted |
 | REQ-P2-04 | Unit | Feed corrupted/blank media path → graceful fallback, no crash |
+| REQ-P2-05 | Unit | Same media_id referenced by two messages → underlying OCR/ASR client invoked exactly once |
 | REQ-P3-04 | Unit | New sender, no history → evidence_message_ids == "none" |
 | REQ-P3-06 | Integration | Muted group + explicit @mention → action escalates |
 | REQ-P5-01 | Integration | Row-count parity check, run as final CI-style gate |
@@ -264,8 +268,10 @@ test category doesn't apply rather than omitting silently.
 
 Append-only. Each entry: date, decision, alternatives considered, rationale.
 
-- **ADR-001** (pending): OCR engine choice.
-- **ADR-002** (pending): ASR engine choice.
+- **ADR-001** (2026-08-01): OCR engine choice — Anthropic's vision-capable
+  Messages API. See ADR-007 for the full rationale and implementation notes.
+- **ADR-002** (2026-08-01): ASR engine choice — OpenAI's Whisper transcription
+  API. See ADR-007 for the full rationale and implementation notes.
 - **ADR-003** (pending): Text similarity method for retrieval (embeddings vs.
   TF-IDF) — likely driven by time budget once actual dataset volume is known.
 - **ADR-004** (pending): Confidence formula weights — to be tuned against
@@ -379,6 +385,62 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   (P3/P4-scope, expected) remain the two documented disagreements above.
   Full `messages.csv` batch: 23 blocked, 23 borderline, 64 clean.
 
+- **ADR-007** (2026-08-01): Multimodal ingestion resolves ADR-001/ADR-002 as
+  follows. **OCR** (REQ-P2-01, REQ-P2-03): a single call per image to
+  Anthropic's vision-capable Messages API (`code/router/ingestion/ocr.py`),
+  using forced tool-use (`tool_choice`) so the response is structured JSON
+  (`has_readable_text`, `extracted_text`, `category`, `confidence`) rather
+  than free-text parsing — this lets one paid call satisfy both REQ-P2-01
+  (text extraction) and REQ-P2-03 (category classification) instead of two.
+  **ASR** (REQ-P2-02): OpenAI's Whisper transcription API
+  (`code/router/ingestion/asr.py`) called with `response_format="verbose_json"`,
+  which returns per-segment `avg_logprob`/`no_speech_prob`; confidence is
+  derived from those (mean of `exp(avg_logprob)` across segments, clamped to
+  `[0, 1]`) rather than taken as an unexplained raw model output, consistent
+  with REQ-P4-02's "no ungrounded confidence" principle one level up.
+  Alternatives considered: a local OCR/ASR stack (`pytesseract` + a local
+  Whisper model) — rejected because this sandbox has neither `tesseract` nor
+  `ffmpeg` installed, while `anthropic` and `openai` are both already present
+  in `requirements.txt`'s environment, and every project doc (`AGENTS.md`
+  §6.3, `CLAUDE.md` "Secrets") already assumes secrets come from environment
+  variables, which only makes sense if a real external API is in play. Both
+  clients are defined as `typing.Protocol` interfaces
+  (`OCRClient`/`ASRClient`) so every test fakes them; no test in this
+  project makes a live network call. `build_ocr_client()`/`build_asr_client()`
+  read `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` from the environment; if a key is
+  absent, the returned client raises `OCRClientError`/`ASRClientError` on
+  first use rather than at import/construction time, so a key-less run still
+  completes end-to-end — every media message just lands in the REQ-P2-04
+  fallback path (`media_failure=true`) instead of halting the whole pipeline.
+  This was not verified against live API output inside this sandbox (no key
+  present here); it is verified via unit/integration tests against fake
+  clients, and real output quality should be spot-checked once run with real
+  keys.
+
+  Two implementation decisions beyond the ADR-001/002 engine choice, both
+  grounded in the actual dataset: (1) `dataset/messages.csv` has 15 image
+  rows and 8 voice rows out of 110 (matching the §6 media-distribution
+  finding below); of those 15 image rows, every one still carries a non-blank
+  `message_text` caption alongside the image (e.g. `msg_065`'s "You just
+  dropped something..." promo copy next to `img_010`) — WhatsApp sends an
+  image with an optional caption as one message, so `normalized_text` for an
+  image row is the caption and the OCR transcript concatenated
+  (`caption\ntranscript`) when both are present, not one replacing the other;
+  OCR alone is used when there is no caption, and the caption alone is used
+  if OCR fails (with `media_failure=true` still recording that the image
+  content itself could not be read). (2) `media_id` repeats across
+  `messages.csv` + `message_history.csv` — `img_008` appears 4 times,
+  `img_010` and `img_003` 3 times each — so REQ-P2-05's caching requirement
+  is load-bearing on this exact dataset, not a hypothetical; the cache is
+  keyed by `media_id` and shared across one `run_media_ingestion` batch call.
+  Every voice message gets the fixed `media_category = "voice_note"`
+  (no classification call needed — there is only one voice sub-type, unlike
+  images' five). The image taxonomy is
+  `poster_promo | screenshot | document_photo | meme | personal_photo`, per
+  REQ-P2-03's example list, plus an `unclassified` fallback the vision model
+  may return when a coarse bucket genuinely doesn't fit — never a fabricated
+  or off-taxonomy string.
+
 ---
 
 ## 6. Open Questions (resolve once Claude Code has inspected the actual dataset)
@@ -395,6 +457,17 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   `message_history.csv` (412 rows) 389 text/blank, 19 `image`, 4 `voice`.
   Media is a small minority of volume, so P2 OCR/ASR effort should
   prioritize correctness and graceful fallback over throughput.
+- **Resolved (2026-08-01)** — Media file shape and reuse: `dataset/media/images/*.jpg`
+  are real JPEGs (e.g. `img_001.jpg` is 1920x1080), `dataset/media/audio/*.mp3`
+  are real MPEG audio (e.g. `vn_001.mp3` is mono, 128kbps, 44.1kHz) — not
+  placeholder/empty files, so OCR/ASR clients receive genuine media bytes.
+  Every `media_id` referenced from `messages.csv`/`message_history.csv`
+  resolves to a row in `images.csv`/`voice_notes.csv` (no orphans either
+  direction). `media_id` repeats across those two message files — `img_008`
+  4 times, `img_010`/`img_003` 3 times each — confirming REQ-P2-05's
+  media_id-keyed cache has real, non-hypothetical reuse to eliminate on this
+  dataset. See ADR-007 for the full engine-choice and design rationale this
+  informed.
 - **Open** — Whether `sample_messages.csv` reason strings imply a house
   style worth matching exactly (tone, length) for the `reason` scoring
   criterion — deferred to P4/P5 when `reason` generation is implemented;
