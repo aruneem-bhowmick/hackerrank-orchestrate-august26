@@ -2,6 +2,7 @@
 
 import pytest
 
+from router.errors import ASRClientError, OCRClientError
 from router.ingestion.asr import ASRResult
 from router.ingestion.ocr import OCRResult
 from router.ingestion.pipeline import normalize_message
@@ -111,3 +112,51 @@ def test_blank_asr_output_is_a_low_confidence_failure(load_fixture_bundle, fixtu
     assert result.media_failure is True
     assert result.media_confidence == 0.2
     assert result.media_failure_reason == "silent audio"
+
+
+@pytest.mark.parametrize(
+    "client, expected_reason",
+    [
+        (FakeOCRClient(error=OCRClientError("  ")), "OCR request failed"),
+        (FakeOCRClient(OCRResult("", 0.0, None, True, " ")), "OCR produced no readable text"),
+    ],
+)
+def test_image_fallback_replaces_blank_client_reasons(
+    load_fixture_bundle, fixtures_dir, client, expected_reason
+):
+    """Failed image rows always carry a usable reason even when the client supplied none."""
+    bundle = load_fixture_bundle("dataset_valid")
+    result = normalize_message(
+        _message("image", "img_test_001"),
+        bundle,
+        fixtures_dir / "dataset_valid",
+        client,
+        FakeASRClient(),
+    )
+
+    assert result.media_failure is True
+    assert result.media_failure_reason == expected_reason
+
+
+@pytest.mark.parametrize(
+    "client, expected_reason",
+    [
+        (FakeASRClient(error=ASRClientError("  ")), "ASR request failed"),
+        (FakeASRClient(ASRResult("", 0.0, True, " ")), "ASR produced no usable transcript"),
+    ],
+)
+def test_voice_fallback_replaces_blank_client_reasons(
+    load_fixture_bundle, fixtures_dir, client, expected_reason
+):
+    """Failed voice rows always carry a usable reason even when the client supplied none."""
+    bundle = load_fixture_bundle("dataset_valid")
+    result = normalize_message(
+        _message("voice", "vn_test_001", caption=""),
+        bundle,
+        fixtures_dir / "dataset_valid",
+        FakeOCRClient(),
+        client,
+    )
+
+    assert result.media_failure is True
+    assert result.media_failure_reason == expected_reason

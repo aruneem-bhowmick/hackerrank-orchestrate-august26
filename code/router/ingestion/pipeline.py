@@ -55,6 +55,17 @@ def _string(message: Mapping[str, object], field: str) -> str:
     return value if isinstance(value, str) else ""
 
 
+def _failure_reason(reason: object, default: str) -> str:
+    """Return a trimmed failure reason or the non-empty fallback reason.
+
+    OCR and ASR clients may report a null, blank, or whitespace-only
+    detail. The normalized-message contract requires failed media rows to
+    include a human-readable reason, so callers cannot pass that raw value
+    through unchanged.
+    """
+    return reason.strip() if isinstance(reason, str) and reason.strip() else default
+
+
 def _build_normalized_message(
     message: Mapping[str, object],
     text: str,
@@ -139,7 +150,13 @@ def _normalize_image_message(
     try:
         result = ocr_client.extract(image_path)
     except OCRClientError as exc:
-        result = OCRResult(text="", confidence=0.0, category=None, failure=True, failure_reason=str(exc))
+        result = OCRResult(
+            text="",
+            confidence=0.0,
+            category=None,
+            failure=True,
+            failure_reason=_failure_reason(str(exc), "OCR request failed"),
+        )
 
     if result.failure or not result.text.strip():
         return _build_normalized_message(
@@ -148,7 +165,7 @@ def _normalize_image_message(
             confidence=min(result.confidence, _FAILURE_CONFIDENCE_CAP),
             failure=True,
             category=validate_image_category(result.category),
-            failure_reason=result.failure_reason or "OCR produced no readable text",
+            failure_reason=_failure_reason(result.failure_reason, "OCR produced no readable text"),
         )
 
     extracted = result.text.strip()
@@ -195,7 +212,12 @@ def _normalize_voice_message(
     try:
         result = asr_client.transcribe(audio_path)
     except ASRClientError as exc:
-        result = ASRResult(text="", confidence=0.0, failure=True, failure_reason=str(exc))
+        result = ASRResult(
+            text="",
+            confidence=0.0,
+            failure=True,
+            failure_reason=_failure_reason(str(exc), "ASR request failed"),
+        )
 
     if result.failure or not result.text.strip():
         return _build_normalized_message(
@@ -204,7 +226,7 @@ def _normalize_voice_message(
             confidence=min(result.confidence, _FAILURE_CONFIDENCE_CAP),
             failure=True,
             category=VOICE_NOTE_CATEGORY,
-            failure_reason=result.failure_reason or "ASR produced no usable transcript",
+            failure_reason=_failure_reason(result.failure_reason, "ASR produced no usable transcript"),
         )
 
     return _build_normalized_message(
