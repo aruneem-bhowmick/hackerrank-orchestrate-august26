@@ -7,3 +7,11 @@ class DatasetError(Exception):
 
 class DatasetSchemaError(DatasetError):
     """Raised when a dataset file is missing, unreadable, or missing required columns."""
+
+
+class DatasetIntegrityError(DatasetError):
+    """Raised when an organizer-only or hidden ground-truth file is discoverable."""
+
+
+class TimelineJoinError(DatasetError):
+    """Raised when message_history and message_events cannot be joined consistently."""
