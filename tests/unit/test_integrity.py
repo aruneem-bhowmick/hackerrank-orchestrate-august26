@@ -4,6 +4,7 @@ from pathlib import Path
 
 from router.dataset.integrity import (
     DEFAULT_EXCLUDED_DIR_NAMES,
+    FIXTURES_EXCLUDED_PATH,
     SUSPICIOUS_NAME_PATTERNS,
     find_disallowed_dataset_files,
     find_suspicious_files,
@@ -61,6 +62,23 @@ def test_find_suspicious_files_on_real_fixture_tree():
     assert [path.name for path in matches] == ["ground_truth_labels.csv"]
 
 
+def test_find_suspicious_files_still_catches_a_file_under_tests_outside_fixtures(tmp_path):
+    """A suspicious file under tests/ but outside tests/fixtures/ is not exempted."""
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "hidden_eval_answers.csv").write_text("message_id,action\n")
+    matches = find_suspicious_files(tmp_path, tmp_path / "dataset")
+    assert [path.name for path in matches] == ["hidden_eval_answers.csv"]
+
+
+def test_find_suspicious_files_excludes_only_the_fixtures_subpath(tmp_path):
+    """A suspicious file under tests/fixtures/ specifically is exempted, nothing broader."""
+    fixtures_dir = tmp_path / "tests" / "fixtures"
+    fixtures_dir.mkdir(parents=True)
+    (fixtures_dir / "ground_truth.csv").write_text("message_id,action\n")
+    assert find_suspicious_files(tmp_path, tmp_path / "dataset") == []
+
+
 def test_suspicious_name_patterns_and_excluded_dirs_are_pinned():
     """The pattern and exclusion lists match their expected, reviewed contents."""
     assert SUSPICIOUS_NAME_PATTERNS == (
@@ -82,6 +100,6 @@ def test_suspicious_name_patterns_and_excluded_dirs_are_pinned():
             ".history",
             ".cursorindexingignore",
             "node_modules",
-            "tests",
         }
     )
+    assert FIXTURES_EXCLUDED_PATH == Path("tests/fixtures")
