@@ -23,7 +23,7 @@ personalization signal.
 - **REQ-P3-03**: Retrieved evidence MUST be causally connected to the P4
   decision — i.e., if evidence shows repeated dismissals from this sender,
   that must visibly lower the value/urgency score, not just appear decoratively
-  in `evidence_message_ids`.
+  in `evidence_ids`.
 - **REQ-P3-04**: If no relevant historical evidence exists for a user/sender
   pair, `evidence_message_ids` MUST be `none` — never fabricate an ID.
 - **REQ-P3-05**: Personalization signals MUST include, where available: group
@@ -95,4 +95,3 @@ and a positive minimum text-similarity threshold.
 4. `REQ-P3-05-personalization-signals.md`
 5. `REQ-P3-03-causal-score-adjustments.md`
 6. `REQ-P3-06-muted-mention-override.md`
-
