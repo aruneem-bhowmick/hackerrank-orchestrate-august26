@@ -10,10 +10,13 @@ upgrade risk_confidence past what this module computed using
 personalization data this module never saw in the first place.
 """
 
+from collections.abc import Mapping
+
 import pandas as pd
 
 from router.dataset.loader import DatasetBundle
 from router.errors import SafetyGateError
+from router.ingestion.message import NormalizedMessage
 from router.safety.message import SafetyMessage
 from router.safety.signals import detect_scam_signals, detect_spam_signals
 from router.safety.thresholds import FORWARD_CHAIN_COUNT_THRESHOLD, T_SCAM, T_SPAM
@@ -155,8 +158,11 @@ def compute_forward_chain_open_rate(
     return (high_forward["message_opened"] == "1").mean()
 
 
-def run_safety_gate(bundle: DatasetBundle) -> dict[str, SafetyVerdict]:
-    """Score every message in bundle.messages; nothing is silently dropped.
+def run_safety_gate(
+    bundle: DatasetBundle,
+    normalized_messages: Mapping[str, NormalizedMessage] | None = None,
+) -> dict[str, SafetyVerdict]:
+    """Score every message with raw or normalized text; nothing is silently dropped.
 
     Computes forward_chain_open_rate, a business_id -> row index, and the
     verified-brand-name set once each (all invariant across the batch),
@@ -166,8 +172,14 @@ def run_safety_gate(bundle: DatasetBundle) -> dict[str, SafetyVerdict]:
     surface only as a mysterious gap much later, in P5's output. Raises
     SafetyGateError (a DatasetError, so code/main.py's existing error
     handling catches it) rather than crashing with an unhandled exception
-    if that guarantee cannot hold.
+    if that guarantee cannot hold. When normalized_messages is supplied, its
+    exact message-id set must match bundle.messages and normalized_text replaces
+    raw message_text before the SafetyMessage allowlist boundary. This exposes
+    OCR/ASR-derived content without allowing user, group, or historical
+    engagement fields into safety scoring.
     """
+    if normalized_messages is not None:
+        _validate_normalized_messages(bundle, normalized_messages)
     forward_chain_open_rate = compute_forward_chain_open_rate(
         bundle.message_history, bundle.message_events
     )
@@ -175,7 +187,7 @@ def run_safety_gate(bundle: DatasetBundle) -> dict[str, SafetyVerdict]:
     verified_brand_names = _verified_brand_names(bundle.business_accounts)
     verdicts = {
         message["message_id"]: score_message(
-            message,
+            _safety_record(message, normalized_messages),
             bundle.business_accounts,
             forward_chain_open_rate,
             business_index=business_index,
@@ -192,6 +204,42 @@ def run_safety_gate(bundle: DatasetBundle) -> dict[str, SafetyVerdict]:
         )
 
     return verdicts
+
+
+def _validate_normalized_messages(
+    bundle: DatasetBundle, normalized_messages: Mapping[str, NormalizedMessage]
+) -> None:
+    """Ensure normalized content has one correctly keyed entry per loaded message."""
+    message_ids = set(bundle.messages["message_id"])
+    if set(normalized_messages) != message_ids:
+        raise SafetyGateError("normalized messages do not match the loaded message_id set.")
+    mismatched = [
+        key for key, message in normalized_messages.items() if key != message.message_id
+    ]
+    if mismatched:
+        raise SafetyGateError(
+            "normalized message mapping key(s) do not match their message_id: "
+            f"{', '.join(sorted(mismatched))}."
+        )
+
+
+def _safety_record(
+    message: Mapping[str, object],
+    normalized_messages: Mapping[str, NormalizedMessage] | None,
+) -> dict[str, object]:
+    """Return the four safety inputs, substituting normalized text when available."""
+    message_id = str(message.get("message_id", ""))
+    normalized_text = (
+        normalized_messages[message_id].normalized_text
+        if normalized_messages is not None
+        else message.get("message_text", "")
+    )
+    return {
+        "message_id": message_id,
+        "business_id": message.get("business_id", ""),
+        "message_text": normalized_text,
+        "forwarded_count": message.get("forwarded_count", ""),
+    }
 
 
 def _lookup_business(business_id: str, business_accounts: pd.DataFrame) -> dict | None:

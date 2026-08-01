@@ -20,8 +20,8 @@ def main(dataset_dir: Path = DEFAULT_DATASET_DIR) -> int:
         bundle = load_dataset_bundle(dataset_dir)
         timelines = build_user_timelines(bundle)
         validate_row_count_parity(bundle.messages, bundle.output_template)
-        verdicts = run_safety_gate(bundle)
         normalized = run_media_ingestion(bundle, dataset_dir)
+        verdicts = run_safety_gate(bundle, normalized)
         evidence = run_personalization(normalized, bundle, timelines)
     except DatasetError as exc:
         print(f"Dataset validation failed: {exc}", file=sys.stderr)
