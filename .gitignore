@@ -1,0 +1,6 @@
+# Tool/editor directories
+.zed/
+.vscode/
+.specstory/
+.history/
+.cursorindexingignore/
