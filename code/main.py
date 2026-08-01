@@ -8,6 +8,7 @@ from router.dataset.loader import load_dataset_bundle
 from router.dataset.timeline import build_user_timelines
 from router.errors import DatasetError
 from router.ingestion.pipeline import run_media_ingestion
+from router.personalization.pipeline import run_personalization
 from router.safety.gate import run_safety_gate
 
 DEFAULT_DATASET_DIR = Path(__file__).resolve().parent.parent / "dataset"
@@ -19,8 +20,9 @@ def main(dataset_dir: Path = DEFAULT_DATASET_DIR) -> int:
         bundle = load_dataset_bundle(dataset_dir)
         timelines = build_user_timelines(bundle)
         validate_row_count_parity(bundle.messages, bundle.output_template)
-        verdicts = run_safety_gate(bundle)
         normalized = run_media_ingestion(bundle, dataset_dir)
+        verdicts = run_safety_gate(bundle, normalized)
+        evidence = run_personalization(normalized, bundle, timelines)
     except DatasetError as exc:
         print(f"Dataset validation failed: {exc}", file=sys.stderr)
         return 1
@@ -43,6 +45,12 @@ def main(dataset_dir: Path = DEFAULT_DATASET_DIR) -> int:
     print(
         f"Media ingestion: {len(media_messages)} image/voice message(s) processed, "
         f"{media_failures} failed to produce usable text."
+    )
+    evidence_found = sum(bool(item.evidence_ids) for item in evidence.values())
+    mention_overrides = sum(bool(item.personalization_signals["mention_override"]) for item in evidence.values())
+    print(
+        f"Personalization: {evidence_found} message(s) have relevant evidence; "
+        f"{mention_overrides} muted-group mention override(s) detected."
     )
     return 0
 
