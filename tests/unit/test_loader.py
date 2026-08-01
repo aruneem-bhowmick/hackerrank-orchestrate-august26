@@ -50,3 +50,11 @@ def test_load_csv_raises_dataset_schema_error_on_empty_file(tmp_path):
     spec = DatasetFileSpec("empty.csv", ())
     with pytest.raises(DatasetSchemaError, match="empty.csv"):
         _load_csv(tmp_path, spec)
+
+
+def test_load_csv_raises_dataset_schema_error_on_undecodable_bytes(tmp_path):
+    """A file with invalid UTF-8 bytes raises DatasetSchemaError, not a raw crash."""
+    (tmp_path / "bad_encoding.csv").write_bytes(b"col1,col2\n\xff\xfe,value\n")
+    spec = DatasetFileSpec("bad_encoding.csv", ())
+    with pytest.raises(DatasetSchemaError, match="bad_encoding.csv"):
+        _load_csv(tmp_path, spec)
