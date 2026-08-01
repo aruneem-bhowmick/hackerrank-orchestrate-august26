@@ -22,6 +22,7 @@ def test_two_receivers_cannot_share_historical_evidence(load_fixture_bundle) -> 
     result = run_personalization(normalized, bundle, timelines)
     assert result["a"].evidence_ids == ("only_u1",)
     assert result["b"].evidence_ids == ()
+    assert result["b"].retrieval_method == "none"
 
 
 def test_batch_rejects_duplicate_internal_message_ids() -> None:

@@ -26,6 +26,7 @@ def test_pipeline_keeps_evidence_in_the_receiving_users_history() -> None:
     result = personalize_message(_normalized_from_row(row), bundle, timelines[row["user_id"]])
     own_ids = {item["message_id"] for item in timelines[row["user_id"]]}
     assert set(result.evidence_ids) <= own_ids
+    assert result.retrieval_method == "source_and_tfidf"
 
 
 def test_batch_returns_one_bundle_per_normalized_message() -> None:
