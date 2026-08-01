@@ -14,14 +14,13 @@ def tokenize(text: object) -> list[str]:
 
 
 def tfidf_cosine_similarity(query: str, documents: Sequence[str]) -> list[float]:
-    """Return per-document TF-IDF cosine scores fit solely to these inputs."""
+    """Return scores using inverse-document frequency fit only to documents."""
     query_tokens = tokenize(query)
     document_tokens = [tokenize(document) for document in documents]
     if not query_tokens:
         return [0.0] * len(documents)
-    corpus = [query_tokens, *document_tokens]
-    document_frequency = Counter(token for row in corpus for token in set(row))
-    count = len(corpus)
+    document_frequency = Counter(token for row in document_tokens for token in set(row))
+    count = len(document_tokens)
     idf = {token: math.log((1 + count) / (1 + frequency)) + 1 for token, frequency in document_frequency.items()}
     query_vector = _tfidf_vector(query_tokens, idf)
     return [_cosine(query_vector, _tfidf_vector(tokens, idf)) for tokens in document_tokens]
@@ -33,7 +32,11 @@ def _tfidf_vector(tokens: Sequence[str], idf: dict[str, float]) -> dict[str, flo
         return {}
     frequencies = Counter(tokens)
     total = len(tokens)
-    return {token: (frequency / total) * idf[token] for token, frequency in frequencies.items()}
+    return {
+        token: (frequency / total) * idf[token]
+        for token, frequency in frequencies.items()
+        if token in idf
+    }
 
 
 def _cosine(left: dict[str, float], right: dict[str, float]) -> float:

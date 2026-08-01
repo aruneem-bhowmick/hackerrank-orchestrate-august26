@@ -17,12 +17,19 @@ def retrieve_evidence(message: NormalizedMessage, timeline: Sequence[Mapping[str
     function deliberately accepts no all-user index, which makes accidental
     cross-user retrieval structurally difficult.
     """
-    candidates = [(row, _source_basis(message, row)) for row in timeline]
-    candidates = [(row, basis) for row, basis in candidates if basis]
+    timeline_rows = list(timeline)
+    scores = tfidf_cosine_similarity(
+        message.normalized_text,
+        [str(row.get("message_text", "")) for row in timeline_rows],
+    )
+    candidates = [
+        (row, _source_basis(message, row), score)
+        for row, score in zip(timeline_rows, scores, strict=True)
+    ]
+    candidates = [(row, basis, score) for row, basis, score in candidates if basis]
     if not candidates:
         return no_evidence_result()
-    scores = tfidf_cosine_similarity(message.normalized_text, [str(row.get("message_text", "")) for row, _ in candidates])
-    matches = [(row, basis, score) for (row, basis), score in zip(candidates, scores, strict=True) if score >= MIN_TEXT_SIMILARITY]
+    matches = [(row, basis, score) for row, basis, score in candidates if score >= MIN_TEXT_SIMILARITY]
     if not matches:
         return no_evidence_result()
     matches.sort(key=lambda item: (-item[2], str(item[0].get("created_at", "")), str(item[0].get("message_id", ""))))
