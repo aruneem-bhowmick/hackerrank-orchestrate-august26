@@ -21,8 +21,7 @@ def lookup_media_file_path(
     media_id, the first match wins, matching
     code/router/safety/gate.py's _lookup_business convention. Never raises:
     a missing record is a normal, expected input for the caller to handle
-    (see REQ-P2-04's fallback contract), not this function's error to
-    surface.
+    as an ingestion fallback case, not this function's error to surface.
     """
     if not media_id:
         return None

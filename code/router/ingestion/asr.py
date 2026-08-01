@@ -82,8 +82,8 @@ class _UnconfiguredASRClient:
 
     Raises ASRClientError on first use rather than at import/construction
     time, so a key-less run still completes end to end — every voice
-    message lands in the REQ-P2-04 fallback path instead of halting the
-    whole pipeline.
+    message lands in the media-failure fallback path instead of halting
+    the whole pipeline.
     """
 
     def transcribe(self, audio_path: Path) -> ASRResult:

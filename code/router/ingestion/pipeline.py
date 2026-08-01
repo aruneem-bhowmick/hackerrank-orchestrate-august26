@@ -12,10 +12,10 @@ from router.ingestion.message import NormalizedMessage
 from router.ingestion.ocr import OCRClient, OCRResult
 
 _FAILURE_CONFIDENCE_CAP = 0.2
-"""The ceiling media_confidence is clamped to on any REQ-P2-04 fallback
-path — low enough to signal "do not trust this," non-zero so a client that
-did offer some confidence before failing is not flattened to an
-indistinguishable zero."""
+"""The ceiling media_confidence is clamped to whenever OCR/ASR could not
+produce usable text — low enough to signal "do not trust this," non-zero
+so a client that did offer some confidence before failing is not
+flattened to an indistinguishable zero."""
 
 
 def normalize_message(
@@ -32,8 +32,8 @@ def normalize_message(
     runs ASR and returns the transcript alone (voice messages carry no
     native caption) through the exact same NormalizedMessage shape — no
     forked downstream logic. Never raises for a well-formed row regardless
-    of OCR/ASR outcome — see the REQ-P2-04 fallback contract implemented
-    in _normalize_image_message/_normalize_voice_message.
+    of OCR/ASR outcome — see the fallback contract implemented in
+    _normalize_image_message/_normalize_voice_message.
     """
     media_type = _string(message, "media_type")
     if media_type == "image":
@@ -95,7 +95,7 @@ def _normalize_text_message(message: Mapping[str, object]) -> NormalizedMessage:
 def _fallback_normalized_message(
     message: Mapping[str, object], text: str, reason: str, category: str | None
 ) -> NormalizedMessage:
-    """Build the shared "could not ingest" NormalizedMessage shape (REQ-P2-04).
+    """Build the shared "could not ingest" NormalizedMessage shape.
 
     Used whenever media cannot be ingested at all — a missing media_id, a
     missing images.csv/voice_notes.csv record, or (via each modality's own

@@ -2,8 +2,9 @@
 
 ADR-001/ADR-007 (SPEC.md §5): OCR is a single call per image to Anthropic's
 vision-capable Messages API, using forced tool-use so the response is
-structured JSON rather than free-text to parse. One call satisfies both
-REQ-P2-01 (text extraction) and REQ-P2-03 (category classification).
+structured JSON rather than free-text to parse. One call returns both the
+extracted text and a coarse category classification, so a second paid call
+is never needed just to categorize an image already being read for text.
 """
 
 import base64
@@ -150,8 +151,8 @@ class _UnconfiguredOCRClient:
 
     Raises OCRClientError on first use rather than at import/construction
     time, so a key-less run still completes end to end — every image
-    message lands in the REQ-P2-04 fallback path instead of halting the
-    whole pipeline.
+    message lands in the media-failure fallback path instead of halting
+    the whole pipeline.
     """
 
     def extract(self, image_path: Path) -> OCRResult:
