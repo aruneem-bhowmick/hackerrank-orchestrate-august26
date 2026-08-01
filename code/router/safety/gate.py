@@ -1,7 +1,18 @@
-"""Scores individual messages for safety risk, independent of any receiving user."""
+"""Scores individual messages for safety risk, independent of any receiving user.
+
+Override contract: once run_safety_gate/score_message assigns
+is_blocked=True to a message, no later phase may recompute or override
+that verdict using personalization signals (sender engagement history,
+group role, quiet hours, etc.). A later phase MAY use a borderline
+verdict (is_blocked=False, risk_type set) as one input among several; it
+may never downgrade a blocked verdict to unblocked, and it may never
+upgrade risk_confidence past what this module computed using
+personalization data this module never saw in the first place.
+"""
 
 import pandas as pd
 
+from router.dataset.loader import DatasetBundle
 from router.safety.signals import detect_scam_signals, detect_spam_signals
 from router.safety.thresholds import FORWARD_CHAIN_COUNT_THRESHOLD, T_SCAM, T_SPAM
 from router.safety.verdict import SafetyVerdict
@@ -101,6 +112,37 @@ def compute_forward_chain_open_rate(
     if high_forward.empty:
         return None
     return (high_forward["message_opened"] == "1").mean()
+
+
+def run_safety_gate(bundle: DatasetBundle) -> dict[str, SafetyVerdict]:
+    """Score every message in bundle.messages; nothing is silently dropped.
+
+    Computes forward_chain_open_rate once (via
+    compute_forward_chain_open_rate on bundle.message_history/
+    message_events), then calls score_message once per row of
+    bundle.messages, returning a dict keyed by message_id. The returned
+    dict has exactly one entry per row of bundle.messages — a missing
+    verdict here would otherwise surface only as a mysterious gap much
+    later, in P5's output.
+    """
+    forward_chain_open_rate = compute_forward_chain_open_rate(
+        bundle.message_history, bundle.message_events
+    )
+    verdicts = {
+        message["message_id"]: score_message(
+            message, bundle.business_accounts, forward_chain_open_rate
+        )
+        for message in bundle.messages.to_dict("records")
+    }
+
+    if len(verdicts) != len(bundle.messages):
+        raise AssertionError(
+            f"run_safety_gate produced {len(verdicts)} verdict(s) for "
+            f"{len(bundle.messages)} message(s) — bundle.messages likely "
+            "has a duplicate message_id."
+        )
+
+    return verdicts
 
 
 def _lookup_business(business_id: str, business_accounts: pd.DataFrame) -> dict | None:
