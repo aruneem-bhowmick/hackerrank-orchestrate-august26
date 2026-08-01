@@ -9,10 +9,12 @@ _EVENT_COLUMNS = ["message_id", "user_id", "message_opened"]
 
 
 def _history(rows: list[tuple[str, str, str]]) -> pd.DataFrame:
+    """Build a minimal message_history frame from (message_id, user_id, forwarded_count) rows."""
     return pd.DataFrame(rows, columns=_HISTORY_COLUMNS)
 
 
 def _events(rows: list[tuple[str, str, str]]) -> pd.DataFrame:
+    """Build a minimal message_events frame from (message_id, user_id, message_opened) rows."""
     return pd.DataFrame(rows, columns=_EVENT_COLUMNS)
 
 

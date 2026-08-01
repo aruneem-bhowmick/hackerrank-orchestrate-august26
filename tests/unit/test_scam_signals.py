@@ -70,6 +70,7 @@ def test_below_threshold_single_weak_signal_does_not_block():
 
 
 def _empty_business_accounts():
+    """An empty business_accounts frame with the real schema's columns."""
     import pandas as pd
 
     return pd.DataFrame(

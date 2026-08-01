@@ -1,0 +1,4 @@
+[tool.interrogate]
+fail-under = 80
+exclude = ["code/evaluation"]
+verbose = 1

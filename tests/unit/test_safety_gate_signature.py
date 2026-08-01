@@ -35,6 +35,7 @@ def test_score_message_signature_is_exactly_message_business_and_open_rate():
 
 
 def _minimal_message(**overrides) -> dict:
+    """A well-formed minimal messages.csv row, with any field overridable by name."""
     message = {
         "message_id": "msg_smoke",
         "user_id": "u_001",

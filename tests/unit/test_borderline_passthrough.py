@@ -23,6 +23,7 @@ _BUSINESS_ACCOUNTS_COLUMNS = [
 
 
 def _empty_business_accounts() -> pd.DataFrame:
+    """An empty business_accounts frame with the real schema's columns."""
     return pd.DataFrame(columns=_BUSINESS_ACCOUNTS_COLUMNS)
 
 

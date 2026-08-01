@@ -15,6 +15,7 @@ _MINIMUM_DETAIL_LENGTH = 15
 
 
 def _all_scam_detail_strings() -> list[str]:
+    """Every RiskSignal.detail string produced across the scam fixture set."""
     details: list[str] = []
     for case in SCAM_FIXTURES:
         matches = detect_scam_signals(case.message_text, case.business, case.verified_brand_names)
@@ -23,6 +24,7 @@ def _all_scam_detail_strings() -> list[str]:
 
 
 def _all_spam_detail_strings() -> list[str]:
+    """Every RiskSignal.detail string produced across the spam fixture set."""
     details: list[str] = []
     for case in SPAM_FIXTURES:
         matches = detect_spam_signals(

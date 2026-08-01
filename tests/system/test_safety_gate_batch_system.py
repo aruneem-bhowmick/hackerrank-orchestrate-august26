@@ -34,6 +34,7 @@ _EVENT_COLUMNS = ["message_id", "user_id", "message_opened"]
 
 
 def _build_bundle() -> DatasetBundle:
+    """A synthetic DatasetBundle spanning clean, borderline, and both blocked categories."""
     messages = pd.DataFrame(
         [
             (
