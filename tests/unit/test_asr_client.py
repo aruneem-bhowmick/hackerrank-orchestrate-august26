@@ -10,7 +10,7 @@ from router.ingestion import asr
 from router.ingestion.pipeline import normalize_message
 
 
-def _response(text: str, segments: list[object]) -> SimpleNamespace:
+def _response(text: object, segments: list[object]) -> SimpleNamespace:
     """Build the minimal verbose Whisper response consumed by the parser."""
     return SimpleNamespace(text=text, segments=segments)
 
@@ -44,10 +44,25 @@ def test_asr_response_parser_maps_missing_or_null_segment_metrics_to_client_erro
         asr._asr_result_from_response(_response("Transcript", [segment]))
 
 
+@pytest.mark.parametrize("text", [42, {"transcript": "not text"}, None])
+def test_asr_response_parser_rejects_non_string_transcript_values(text: object) -> None:
+    """Malformed transcript payloads cannot be coerced into successful text."""
+    with pytest.raises(ASRClientError, match="non-string 'text'"):
+        asr._asr_result_from_response(_response(text, [_segment(math.log(0.8), 0.1)]))
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        _response("Transcript", [SimpleNamespace(no_speech_prob=0.1)]),
+        _response(42, [_segment(math.log(0.8), 0.1)]),
+        _response({"transcript": "not text"}, [_segment(math.log(0.8), 0.1)]),
+    ],
+)
 def test_voice_normalization_turns_a_malformed_asr_response_into_a_fallback(
-    load_fixture_bundle, fixtures_dir
+    load_fixture_bundle, fixtures_dir, response
 ):
-    """A parser error from the ASR boundary cannot abort normalization of the voice row."""
+    """Parser errors, including malformed text, cannot abort voice normalization."""
     bundle = load_fixture_bundle("dataset_valid")
 
     class MalformedResponseClient:
@@ -55,9 +70,7 @@ def test_voice_normalization_turns_a_malformed_asr_response_into_a_fallback(
 
         def transcribe(self, audio_path):
             """Parse malformed verbose data through the same client-side response parser."""
-            return asr._asr_result_from_response(
-                _response("Transcript", [SimpleNamespace(no_speech_prob=0.1)])
-            )
+            return asr._asr_result_from_response(response)
 
     message = {
         "message_id": "voice_malformed",
