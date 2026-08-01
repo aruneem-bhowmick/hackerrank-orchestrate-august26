@@ -54,8 +54,11 @@ remain.
    existing voice, and any quoted or code material to leave alone.
 2. Flag concrete AI-isms with the exact phrase or sentence that caused the
    concern. Do not call a normal technical term an AI tell without context.
-3. Replace vague praise with the specific fact, mechanism, example, or opinion
-   that gives the sentence its value.
+3. Replace vague praise with a specific fact, mechanism, example, or opinion
+   drawn from the source material or the writer's own stated experience.
+   Never invent a number, comparison, mechanism, or example to fill the
+   gap. If the source gives no evidence for a claim, remove the claim or
+   leave it clearly flagged for the writer to verify and supply.
 4. Vary sentence and paragraph length. Keep useful fragments and idiosyncratic
    phrasing when they sound like the writer, not like an error.
 5. Re-read the result for remaining template language, repetitive rhythm, and
@@ -117,7 +120,9 @@ Flag these only when two or more appear in one paragraph: `harness`,
 At high density, replace vague terms such as `significant`, `innovative`,
 `effective`, `dynamic`, `scalable`, `compelling`, `unprecedented`,
 `exceptional`, `remarkable`, `sophisticated`, and `instrumental` with a number,
-comparison, mechanism, or example. The isolated word is not a problem; the
+comparison, mechanism, or example drawn from the source — never a fabricated
+one. If the source has no such evidence, cut the vague term rather than
+inventing a specific to replace it. The isolated word is not a problem; the
 pattern is.
 
 ### Templates and transitions
