@@ -149,5 +149,33 @@ or a sharp opinion when it fits the writer and the medium. Technical documents
 need precision first; social writing may need energy; neither needs inflated
 language.
 
-This project-local skill is based on the MIT-licensed "Avoid AI Writing"
-guidance supplied by Conor Bronsdon.
+## License
+
+This project-local skill adapts the "Avoid AI Writing" guidance originally
+supplied by Conor Bronsdon, distributed under the MIT License below. The
+exact source URL and version were not provided with the adapted text; add
+that reference here if it becomes available.
+
+```
+MIT License
+
+Copyright (c) Conor Bronsdon
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+```
