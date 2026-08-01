@@ -9,9 +9,9 @@
 Establish the `SafetyVerdict` output contract and the `score_message`
 entrypoint that every later scam/spam signal detector plugs into. The
 requirement's guarantee — "a message's safety verdict must not depend on
-`user_id`, group role, or the user's typical engagement pattern" — is
-enforced here structurally, by giving `score_message` a signature that has
-no parameter through which personalization data could even be passed in.
+  `user_id`, group role, or the user's typical engagement pattern" — is
+  enforced by converting each loaded row to a sender-scoped allowlist before
+  detector code runs.
 This is the phase's foundation: P1 is the first of the two coupled
 decisions in `SPEC.md` §0, and it must be safe to run before P3/P4 exist at
 all, using only `DatasetBundle` fields that are not scoped to any one
@@ -101,19 +101,18 @@ def score_message(
     the entire user base — see REQ-P1-03 for how it's computed; this prompt
     only needs to accept and thread the parameter through.
 
-    Deliberately excluded from the signature: user_id, UserTimeline,
+    Immediately convert message to a SafetyMessage allowlist with only
+    message_id, business_id, message_text, and forwarded_count. The detector
+    path receives the DTO, not the original record, so user_id, UserTimeline,
     DatasetBundle.users, DatasetBundle.message_history,
     DatasetBundle.message_events, DatasetBundle.user_business_history,
-    DatasetBundle.groups, DatasetBundle.group_members. Their absence is
-    what makes REQ-P1-01/REQ-P1-04 compliance structural rather than a
-    convention someone could accidentally violate later. Do not widen this
-    signature in a later prompt to accept any of them.
+    DatasetBundle.groups, and DatasetBundle.group_members cannot reach it.
 
     Raises no exceptions for well-formed input (missing/blank optional
     fields like business_id or message_text are valid and handled, not
     errors). This prompt returns a "clean" SafetyVerdict
     (is_blocked=False, risk_type=None, risk_confidence=0.0,
-    risk_signals=[]) unconditionally — REQ-P1-02/03 wire in real scoring.
+    risk_signals=()) unconditionally — REQ-P1-02/03 wire in real scoring.
     """
 ```
 
@@ -156,11 +155,11 @@ field from the original row.
 - **Unit:** `tests/unit/test_safety_verdict.py` — `SafetyVerdict` and
   `RiskSignal` construct with the exact field set and types from §1.3;
   `SafetyVerdict` is frozen (attempting to mutate a field raises
-  `FrozenInstanceError`); `risk_signals` defaults are never `None` when
+  `FrozenInstanceError`); `risk_signals` is immutable and never `None` when
   constructed via `score_message`. `tests/unit/test_safety_gate_signature.py`
   — `score_message` called with a minimal well-formed message dict (all
   required `messages.csv` columns, blank `message_text`) returns
-  `is_blocked=False, risk_type=None, risk_confidence=0.0, risk_signals=[]`;
+   `is_blocked=False, risk_type=None, risk_confidence=0.0, risk_signals=()`;
   `message_id` in the returned verdict equals the input's.
 - **Integration:** `score_message` called with a real row pulled from
   `bundle.messages` (loaded via `load_dataset_bundle` against

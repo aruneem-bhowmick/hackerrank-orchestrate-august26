@@ -317,13 +317,13 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   390-day-old domain). Joining `message_history.csv` + `message_events.csv`
   shows historical messages with `forwarded_count >= 7` have a 4.8% open
   rate vs. 67.5% overall — a strong, aggregate, receiver-independent spam
-  corroborator. Cross-referencing `sample_messages.csv` shows mass-forward
-  "chain" messages (`sample_msg_013`/`014`, blessing/health-tip forwards)
-  are muted via *personalization* (message_type `greeting`/`forward`, not
-  `spam`) rather than the safety gate — so `T_spam` is calibrated high
-  enough that forward-chain language plus a high `forwarded_count` alone
-  stays in the borderline band (REQ-P1-06) and only crosses into `mute`
-  when corroborated by the low-engagement aggregate signal above.
+  corroborator. The post-check for `sample_msg_014` produces a blocked spam
+  verdict at 0.60: chain language (0.25), an 11-count forward (0.15), and
+  the 4.8% aggregate open rate (0.20). Its reference row still calls the
+  final message type `forward` and attributes `mute` to user history, so
+  the safety label is intermediate rather than a replacement for the final
+  type. Without the aggregate-engagement corroborator, the first two
+  signals total 0.40 and remain borderline.
   `T_scam = T_spam = 0.55`, both documented in
   `code/router/safety/thresholds.py` alongside each signal's weight and the
   dataset observation that justifies it.

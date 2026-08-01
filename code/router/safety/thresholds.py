@@ -15,11 +15,11 @@ weights in signals.py.
 T_SPAM: float = 0.55
 """Minimum combined spam-signal weight for is_blocked=True, risk_type="spam".
 
-Calibrated deliberately high: mass-forward "chain" messages in
-sample_messages.csv are muted via personalization (message_type
-greeting/forward), not the safety gate, so forward-chain language plus a
-high forwarded_count alone must stay in the borderline band and only cross
-this threshold when corroborated by the low-engagement aggregate signal.
+Calibrated so a chain message with language and a high forwarded_count alone
+stays borderline at 0.40. The checked sample_msg_014 adds the 0.20 aggregate
+low-engagement signal, reaches 0.60, and blocks as spam; its reference row
+still labels the final message type as forward, which downstream fusion may
+preserve.
 """
 
 FORWARD_CHAIN_COUNT_THRESHOLD: int = 7

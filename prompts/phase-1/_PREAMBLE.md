@@ -10,7 +10,7 @@ Per `SPEC.md` §0, the router is two coupled decisions: a user-independent
 safety gate, then a personalized value/urgency score. This phase builds the
 first one only.
 
-```
+```text
 P0 Data Load/Validate
   → P1 Safety Gate (user-independent)      <-- this phase
     → P2 Multimodal Ingestion
@@ -56,7 +56,7 @@ OCR/ASR handling in this phase, that is P2's job per `SPEC.md` §2 Phase 2.
 
 ### Input this phase reads (§1.0, §1.1)
 
-```
+```text
 DatasetBundle = {
   messages: DataFrame,                 # dataset/messages.csv (read-only)
   users: DataFrame,
@@ -91,7 +91,7 @@ messages_sent_30d, user_reports_30d, domain_used_by_sender_age_days`.
 
 ### Output this phase produces (§1.3, verbatim)
 
-```
+```text
 { message_id, is_blocked: bool, risk_type: str | null, risk_confidence: float,
   risk_signals: tuple[str, ...] }
 ```
@@ -118,11 +118,11 @@ serialization boundary that requires an array.
 > scorer is structurally immune to since it never treats message text as
 > instructions; (b) a hybrid rules+LLM ensemble — deferred, out of scope
 > for this stage, revisit only if rule-based precision proves inadequate
-> once P4 fusion is built. `score_message`'s signature takes only the
-> message, `business_accounts`, and a precomputed aggregate engagement
-> rate — never `user_id`, `message_history`, `message_events`, `users`, or
-> `user_business_history` — so REQ-P1-01/REQ-P1-04 user-independence is
-> enforced structurally, not just by convention.
+> once P4 fusion is built. `score_message` converts each loaded row to a
+> `SafetyMessage` allowlist containing only `message_id`, `business_id`,
+> `message_text`, and `forwarded_count`; detector code never receives the
+> original row or any receiver-scoped field. Boundary tests verify both the
+> DTO field set and verdict stability when user-scoped values change.
 >
 > Signal design was calibrated against the real dataset rather than
 > invented: `business_accounts.csv`'s 26 unverified rows whose `brand_name`
@@ -135,13 +135,13 @@ serialization boundary that requires an array.
 > 390-day-old domain). Joining `message_history.csv` + `message_events.csv`
 > shows historical messages with `forwarded_count >= 7` have a 4.8% open
 > rate vs. 67.5% overall — a strong, aggregate, receiver-independent spam
-> corroborator. Cross-referencing `sample_messages.csv` shows mass-forward
-> "chain" messages (`sample_msg_013`/`014`, blessing/health-tip forwards)
-> are muted via *personalization* (message_type `greeting`/`forward`, not
-> `spam`) rather than the safety gate — so `T_spam` is calibrated high
-> enough that forward-chain language plus a high `forwarded_count` alone
-> stays in the borderline band (REQ-P1-06) and only crosses into `mute`
-> when corroborated by the low-engagement aggregate signal above.
+> corroborator. The post-check for `sample_msg_014` produces a blocked spam
+> verdict at 0.60: chain language (0.25), an 11-count forward (0.15), and
+> the 4.8% aggregate open rate (0.20). Its reference row still calls the
+> final message type `forward` and attributes `mute` to user history, so the
+> safety label is intermediate rather than a replacement for the final type.
+> Without the aggregate-engagement corroborator, the first two signals total
+> 0.40 and remain borderline.
 > `T_scam = T_spam = 0.55`, both documented in
 > `code/router/safety/thresholds.py` alongside each signal's weight and the
 > dataset observation that justifies it.
