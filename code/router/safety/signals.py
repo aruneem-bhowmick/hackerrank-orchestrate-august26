@@ -2,6 +2,11 @@
 
 import re
 
+from router.safety.thresholds import (
+    FORWARD_CHAIN_COUNT_THRESHOLD,
+    HIGH_VOLUME_BUSINESS_THRESHOLD,
+    LOW_ENGAGEMENT_OPEN_RATE_CUTOFF,
+)
 from router.safety.verdict import RiskSignal
 
 _DOMAIN_TOKEN_PATTERN = re.compile(
@@ -172,5 +177,100 @@ def _detect_business_scam_signals(
                 detail=f"sender's domain is only {int(domain_age_raw)} day(s) old",
             )
         )
+
+    return signals
+
+
+_MASS_FORWARD_CHAIN_PATTERN = re.compile(
+    r"forward this to|share with \d+ people|share this (?:with|blessing)|"
+    r"break the chain|forward to at least|fwd as received|forwarded:|"
+    r"forwarded health",
+    re.IGNORECASE,
+)
+
+_REPETITIVE_PROMOTION_PATTERN = re.compile(
+    r"\d+% off|\bsale\b|\boffer\b|\bpromo\b|shopping offer|limited time|"
+    r"won'?t wait|hurry, it may",
+    re.IGNORECASE,
+)
+
+
+def detect_spam_signals(
+    message_text: str,
+    forwarded_count: int,
+    business: dict | None,
+    forward_chain_open_rate: float | None,
+) -> list[RiskSignal]:
+    """Return every spam RiskSignal that fires for one message.
+
+    message_text is the message's normalized text. forwarded_count is the
+    message's forwarded_count field, as an int. business is the matching
+    row of business_accounts as a dict, or None. forward_chain_open_rate
+    is the precomputed aggregate open rate for historical high-
+    forwarded_count messages across the whole user base (see
+    compute_forward_chain_open_rate), or None if unavailable.
+
+    low_forward_chain_engagement only fires alongside high_forwarded_count
+    — it is a corroborator for an already-high forwarded_count, not
+    independent evidence on its own. Never raises for well-formed input.
+    """
+    signals: list[RiskSignal] = []
+    text = message_text or ""
+    is_high_forward = forwarded_count >= FORWARD_CHAIN_COUNT_THRESHOLD
+
+    if _MASS_FORWARD_CHAIN_PATTERN.search(text):
+        signals.append(
+            RiskSignal(
+                name="mass_forward_chain_language",
+                weight=0.25,
+                detail="message uses mass-forward chain-letter language",
+            )
+        )
+
+    if is_high_forward:
+        signals.append(
+            RiskSignal(
+                name="high_forwarded_count",
+                weight=0.15,
+                detail=f"forwarded_count is {forwarded_count}, a mass-forward level",
+            )
+        )
+        if (
+            forward_chain_open_rate is not None
+            and forward_chain_open_rate <= LOW_ENGAGEMENT_OPEN_RATE_CUTOFF
+        ):
+            signals.append(
+                RiskSignal(
+                    name="low_forward_chain_engagement",
+                    weight=0.20,
+                    detail=(
+                        "historically, messages forwarded this many times are "
+                        f"opened only {forward_chain_open_rate:.0%} of the time "
+                        "across the user base"
+                    ),
+                )
+            )
+
+    if business is not None:
+        if _REPETITIVE_PROMOTION_PATTERN.search(text):
+            signals.append(
+                RiskSignal(
+                    name="repetitive_business_promotion",
+                    weight=0.35,
+                    detail="message uses generic repetitive promotional phrasing",
+                )
+            )
+        messages_sent_raw = business.get("messages_sent_30d", "").strip()
+        if messages_sent_raw.isdigit() and int(messages_sent_raw) >= HIGH_VOLUME_BUSINESS_THRESHOLD:
+            signals.append(
+                RiskSignal(
+                    name="high_volume_broadcast",
+                    weight=0.25,
+                    detail=(
+                        f"business sends {messages_sent_raw} messages/30d, a "
+                        "very high broadcast volume"
+                    ),
+                )
+            )
 
     return signals

@@ -2,8 +2,8 @@
 
 import pandas as pd
 
-from router.safety.signals import detect_scam_signals
-from router.safety.thresholds import T_SCAM
+from router.safety.signals import detect_scam_signals, detect_spam_signals
+from router.safety.thresholds import FORWARD_CHAIN_COUNT_THRESHOLD, T_SCAM, T_SPAM
 from router.safety.verdict import SafetyVerdict
 
 
@@ -37,13 +37,18 @@ def score_message(
     """
     business = _lookup_business(message.get("business_id", ""), business_accounts)
     verified_brand_names = _verified_brand_names(business_accounts)
+    message_text = message.get("message_text", "")
+    forwarded_count = _parse_forwarded_count(message.get("forwarded_count", ""))
 
-    scam_matches = detect_scam_signals(
-        message.get("message_text", ""), business, verified_brand_names
-    )
+    scam_matches = detect_scam_signals(message_text, business, verified_brand_names)
     scam_confidence = min(1.0, sum(signal.weight for signal in scam_matches))
 
-    if scam_confidence <= 0.0:
+    spam_matches = detect_spam_signals(
+        message_text, forwarded_count, business, forward_chain_open_rate
+    )
+    spam_confidence = min(1.0, sum(signal.weight for signal in spam_matches))
+
+    if scam_confidence <= 0.0 and spam_confidence <= 0.0:
         return SafetyVerdict(
             message_id=message["message_id"],
             is_blocked=False,
@@ -52,13 +57,50 @@ def score_message(
             risk_signals=[],
         )
 
+    # A tie prefers "scam": SPEC.md §0 frames safety risk as the more
+    # severe of the two categories, so a tie should not silently default
+    # to the less severe label.
+    if scam_confidence >= spam_confidence:
+        risk_type, confidence, matches, threshold = "scam", scam_confidence, scam_matches, T_SCAM
+    else:
+        risk_type, confidence, matches, threshold = "spam", spam_confidence, spam_matches, T_SPAM
+
     return SafetyVerdict(
         message_id=message["message_id"],
-        is_blocked=scam_confidence >= T_SCAM,
-        risk_type="scam",
-        risk_confidence=scam_confidence,
-        risk_signals=[signal.detail for signal in scam_matches],
+        is_blocked=confidence >= threshold,
+        risk_type=risk_type,
+        risk_confidence=confidence,
+        risk_signals=[signal.detail for signal in matches],
     )
+
+
+def _parse_forwarded_count(raw: str) -> int:
+    """Parse messages.csv's forwarded_count field, defaulting blank to 0."""
+    return int(raw) if raw.strip().isdigit() else 0
+
+
+def compute_forward_chain_open_rate(
+    message_history: pd.DataFrame, message_events: pd.DataFrame
+) -> float | None:
+    """Aggregate historical open rate for high-forwarded_count messages.
+
+    Joins message_history and message_events on message_id (inner join —
+    rows without a matching event are excluded, they don't contribute a
+    known open/not-open outcome), filters to forwarded_count >=
+    FORWARD_CHAIN_COUNT_THRESHOLD, and returns the mean of
+    message_opened == "1" among those rows. Returns None if no rows meet
+    the forwarded_count filter (undefined rate, not zero). This aggregates
+    across every user and sender in the historical data, not any one
+    receiving user's own history, so it stays user-independent. Intended
+    to be called once per run, not once per message.
+    """
+    merged = message_history.merge(message_events, on="message_id", how="inner")
+    high_forward = merged[
+        merged["forwarded_count"].apply(_parse_forwarded_count) >= FORWARD_CHAIN_COUNT_THRESHOLD
+    ]
+    if high_forward.empty:
+        return None
+    return (high_forward["message_opened"] == "1").mean()
 
 
 def _lookup_business(business_id: str, business_accounts: pd.DataFrame) -> dict | None:
