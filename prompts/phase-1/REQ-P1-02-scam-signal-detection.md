@@ -97,7 +97,10 @@ def detect_scam_signals(message_text: str, business: dict | None) -> list[RiskSi
       explicit attempt to instruct the routing system itself (e.g.
       "ignore previous", "routing override", "assistant instruction",
       "set action=", "mark this as notify"). See ADR-006 — this is a
-      real, deliberate pattern present in the dataset, not a hypothetical.
+       real, deliberate pattern present in the dataset, not a hypothetical.
+    - qr_code_payment_demand (weight 0.30): message_text demands payment by
+      QR code or uses clearance/fee/penalty wording. Legitimate merchants
+      may use QR payments, so this signal requires corroboration to block.
     - suspicious_link_or_domain (weight 0.20): message_text contains a
       bare domain-like token (regex, e.g. `[\\w-]+\\.(com|in|net|org|co|io|
       xyz|info)`) that does not match business["official_domain"] when a
@@ -126,6 +129,7 @@ def detect_scam_signals(message_text: str, business: dict | None) -> list[RiskSi
 ## Implementation details
 1. Define the text-pattern detectors (`payment_or_credential_request`,
    `urgent_deadline_pressure`, `router_instruction_injection`,
+   `qr_code_payment_demand`,
    `suspicious_link_or_domain`) as module-level compiled `re.Pattern`
    lists or a small ordered mapping of `signal_name -> (compiled_pattern,
    weight, detail_template)`, checked case-insensitively against
@@ -178,7 +182,8 @@ def detect_scam_signals(message_text: str, business: dict | None) -> list[RiskSi
 ## Test suite (exhaustive)
 - **Unit:** `tests/unit/test_scam_signals.py` — one test per detector,
   each with a firing case and a non-firing case in isolation (payment
-  request alone, urgency alone, injection alone, suspicious link alone,
+  request alone, urgency alone, injection alone, QR-payment demand alone,
+  suspicious link alone,
   unverified business alone, domain mismatch alone, young domain alone,
   brand impersonation alone using two synthetic business rows — one
   verified "Acme Bank", one unverified "Acme Bank" with domain mismatch);
@@ -240,6 +245,9 @@ on `signals.py`'s scam detectors and the scam-scoring branch added to
   `test_scam_signals.py::test_urgency_plus_payment_request_blocks`.
 - A suspicious link/domain token contributes to `risk_type="scam"` →
   `test_scam_signals.py::test_suspicious_link_detected`.
+- A QR-payment demand is detected as a 0.30 corroborating signal without
+  blocking by itself →
+  `test_scam_signals.py::test_qr_payment_fixture_detects_a_nonblocking_corroborating_signal`.
 - Impersonation of a verified business's brand name by an unverified row
   is detected without any hardcoded brand list →
   `test_scam_gate_integration.py::test_brand_impersonation_detected_from_data`.

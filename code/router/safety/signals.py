@@ -66,6 +66,8 @@ _SCAM_TEXT_PATTERNS: tuple[tuple[str, float, re.Pattern, str, re.Pattern | None]
     ),
     (
         "qr_code_payment_demand",
+        # QR payments are legitimate in ordinary commerce, so this 0.30
+        # signal requires corroboration before it can block a message.
         0.30,
         re.compile(
             r"scan (?:this|the)?\s*qr|clearance amount|"

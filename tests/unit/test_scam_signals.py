@@ -58,6 +58,16 @@ def test_negation_only_suppresses_the_adjacent_credential_keyword():
     assert {signal.name for signal in matches} == {"payment_or_credential_request"}
 
 
+def test_qr_payment_fixture_detects_a_nonblocking_corroborating_signal():
+    """A QR payment demand is recorded but cannot mute a message by itself."""
+    case = next(case for case in SCAM_FIXTURES if case.name == "qr_code_payment_demand_alone")
+
+    matches = detect_scam_signals(case.message_text, case.business, case.verified_brand_names)
+
+    assert [signal.name for signal in matches] == ["qr_code_payment_demand"]
+    assert matches[0].weight == pytest.approx(0.30)
+
+
 def test_mixed_official_and_unfamiliar_domains_remain_suspicious():
     """An official-domain token cannot suppress a different link in the same message."""
     matches = detect_scam_signals(

@@ -82,6 +82,14 @@ SCAM_FIXTURES: tuple[ScamFixtureCase, ...] = (
         expected_is_blocked=False,
     ),
     ScamFixtureCase(
+        name="qr_code_payment_demand_alone",
+        message_text="Scan this QR to pay the clearance fee before delivery.",
+        business=None,
+        verified_brand_names=frozenset(),
+        expected_signal_names=frozenset({"qr_code_payment_demand"}),
+        expected_is_blocked=False,
+    ),
+    ScamFixtureCase(
         name="payment_plus_urgency_blocks",
         message_text=(
             "Your workspace access will expire today. Reply with the 6 "
