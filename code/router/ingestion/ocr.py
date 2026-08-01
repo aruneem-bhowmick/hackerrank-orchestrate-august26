@@ -16,25 +16,13 @@ from typing import Protocol
 import anthropic
 
 from router.errors import OCRClientError
+from router.ingestion.categories import IMAGE_CATEGORIES
 
 _DEFAULT_OCR_MODEL = "claude-sonnet-5"
 _DEFAULT_MAX_TOKENS = 1024
 _DEFAULT_IMAGE_MEDIA_TYPE = "image/jpeg"
 
 _OCR_TOOL_NAME = "submit_image_analysis"
-
-_OCR_CATEGORIES = (
-    "poster_promo",
-    "screenshot",
-    "document_photo",
-    "meme",
-    "personal_photo",
-    "unclassified",
-)
-"""The coarse image taxonomy the tool schema's category enum is constrained
-to. Centralized in router.ingestion.categories as of REQ-P2-03; kept local
-here in the meantime so this module has no forward dependency on a module
-that does not exist yet."""
 
 _OCR_INSTRUCTION = (
     "Analyze this image for a WhatsApp message routing system. Extract any "
@@ -65,7 +53,7 @@ def _ocr_tool_schema() -> dict:
                 },
                 "category": {
                     "type": "string",
-                    "enum": sorted(_OCR_CATEGORIES),
+                    "enum": sorted(IMAGE_CATEGORIES),
                     "description": "The single best-fit coarse category for this image.",
                 },
                 "confidence": {

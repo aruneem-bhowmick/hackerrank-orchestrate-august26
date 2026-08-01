@@ -6,6 +6,7 @@ from typing import Mapping
 from router.dataset.loader import DatasetBundle
 from router.errors import ASRClientError, OCRClientError
 from router.ingestion.asr import ASRClient, ASRResult
+from router.ingestion.categories import VOICE_NOTE_CATEGORY, validate_image_category
 from router.ingestion.media import lookup_media_file_path
 from router.ingestion.message import NormalizedMessage
 from router.ingestion.ocr import OCRClient, OCRResult
@@ -15,12 +16,6 @@ _FAILURE_CONFIDENCE_CAP = 0.2
 path — low enough to signal "do not trust this," non-zero so a client that
 did offer some confidence before failing is not flattened to an
 indistinguishable zero."""
-
-_VOICE_NOTE_CATEGORY = "voice_note"
-"""The fixed media_category for every voice message. Centralized in
-router.ingestion.categories as of REQ-P2-03; kept as a private literal here
-in the meantime so this module has no forward dependency on a module that
-does not exist yet."""
 
 
 def normalize_message(
@@ -146,14 +141,19 @@ def _normalize_image_message(
             text=caption,
             confidence=min(result.confidence, _FAILURE_CONFIDENCE_CAP),
             failure=True,
-            category=None,
+            category=validate_image_category(result.category),
             failure_reason=result.failure_reason or "OCR produced no readable text",
         )
 
     extracted = result.text.strip()
     text = f"{caption}\n{extracted}".strip() if caption else extracted
     return _build_normalized_message(
-        message, text=text, confidence=result.confidence, failure=False, category=None, failure_reason=None
+        message,
+        text=text,
+        confidence=result.confidence,
+        failure=False,
+        category=validate_image_category(result.category),
+        failure_reason=None,
     )
 
 
@@ -165,7 +165,7 @@ def _normalize_voice_message(
     Voice messages carry no native caption (message_text is always blank
     per the input schema), so normalized_text is the transcript on
     success or "" on any failure — there is nothing else to fall back to.
-    media_category is always _VOICE_NOTE_CATEGORY, success or failure —
+    media_category is always VOICE_NOTE_CATEGORY, success or failure —
     unlike an image, a voice message's category is never unknown, only
     its transcript is.
     """
@@ -183,7 +183,7 @@ def _normalize_voice_message(
             else "voice message has no media_id"
         )
         return _fallback_normalized_message(
-            message, text="", reason=reason, category=_VOICE_NOTE_CATEGORY
+            message, text="", reason=reason, category=VOICE_NOTE_CATEGORY
         )
 
     try:
@@ -197,7 +197,7 @@ def _normalize_voice_message(
             text="",
             confidence=min(result.confidence, _FAILURE_CONFIDENCE_CAP),
             failure=True,
-            category=_VOICE_NOTE_CATEGORY,
+            category=VOICE_NOTE_CATEGORY,
             failure_reason=result.failure_reason or "ASR produced no usable transcript",
         )
 
@@ -206,6 +206,6 @@ def _normalize_voice_message(
         text=result.text.strip(),
         confidence=result.confidence,
         failure=False,
-        category=_VOICE_NOTE_CATEGORY,
+        category=VOICE_NOTE_CATEGORY,
         failure_reason=None,
     )
