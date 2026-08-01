@@ -52,18 +52,14 @@ def build_user_timelines(bundle: DatasetBundle) -> UserTimeline:
     _raise_on_orphaned_events(merged)
     _raise_on_user_id_mismatch(merged)
 
-    timelines: UserTimeline = {}
-    for _, row in merged.iterrows():
-        entry = {field: row[field] for field in _HISTORY_FIELDS}
-        for field in _EVENT_FIELDS:
-            value = row[field]
-            entry[field] = "" if pd.isna(value) else value
-        timelines.setdefault(row["user_id_history"], []).append(entry)
+    merged = merged.sort_values("created_at")
+    merged[list(_EVENT_FIELDS)] = merged[list(_EVENT_FIELDS)].fillna("")
+    fields = list(_HISTORY_FIELDS) + list(_EVENT_FIELDS)
 
-    for entries in timelines.values():
-        entries.sort(key=lambda entry: entry["created_at"])
-
-    return timelines
+    return {
+        user_id: group[fields].to_dict("records")
+        for user_id, group in merged.groupby("user_id_history")
+    }
 
 
 def _raise_on_duplicate_message_ids(message_history: pd.DataFrame) -> None:
