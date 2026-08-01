@@ -348,6 +348,37 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   check; revisit only if P4 fusion still under-catches these cases once
   personalization signals are available to it.
 
+  Review pass (2026-08-01): a precision-focused code review surfaced six
+  issues, all fixed and re-verified against `sample_messages.csv` and the
+  full `messages.csv` batch. Two changed real classification behavior:
+  (1) `detect_spam_signals` never read `verified`, so a legitimate
+  verified high-volume sender (shaped like the real dataset's
+  `business_092`/Thrillophilia) could be blocked as spam for ordinary
+  promotional copy — cross-checking `sample_messages.csv` confirmed every
+  `message_type=spam` row there has an unverified business, while
+  verified businesses' muted promotions are labeled `promotion` with a
+  personalization reason, never `spam`; gated
+  `repetitive_business_promotion`/`high_volume_broadcast` behind
+  `verified=="0"`, matching how the scam-side business signals already
+  work. This resolved the `sample_msg_015` false positive outright. (2)
+  The credential-request negation guard (`no OTP/payment required`)
+  suppressed a match if any negation phrase fell within a fixed 40-character
+  window, regardless of whether it was actually about the same credential
+  — a real false negative (an unrelated "no OTP required" clause clearing
+  a genuine password request nearby). Fixed by requiring the negation
+  match's own span to overlap the credential match's span, which every
+  negation alternative satisfies by construction for a genuine disclaimer.
+  The other four fixes were defensive/latent (a bare `AssertionError`
+  promoted to a typed, catchable `SafetyGateError`; a blank-`brand_name`
+  edge case in the impersonation check; a duplicate-`message_id` fan-out
+  guard on the aggregate open-rate join; hoisting the business index and
+  verified-brand-name set out of the per-message loop) and did not change
+  the real dataset's classification outcomes. Net result:
+  `sample_messages.csv` agreement moved from 27/30 (90%) to 28/30
+  (93.3%); `sample_msg_014` (P1-scope, expected) and `sample_msg_043`
+  (P3/P4-scope, expected) remain the two documented disagreements above.
+  Full `messages.csv` batch: 23 blocked, 23 borderline, 64 clean.
+
 ---
 
 ## 6. Open Questions (resolve once Claude Code has inspected the actual dataset)
