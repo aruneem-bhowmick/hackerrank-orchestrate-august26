@@ -1,15 +1,21 @@
-"""Normalizes one message at a time to the NormalizedMessage contract, per SPEC.md §1.2."""
+"""Normalizes messages to the NormalizedMessage contract, per SPEC.md §1.2.
+
+normalize_message handles one message; run_media_ingestion is the batch
+entrypoint that scores every row of a loaded DatasetBundle, mirroring
+router.safety.gate.run_safety_gate's role one module tree over.
+"""
 
 from pathlib import Path
 from typing import Mapping
 
 from router.dataset.loader import DatasetBundle
-from router.errors import ASRClientError, OCRClientError
-from router.ingestion.asr import ASRClient, ASRResult
+from router.errors import ASRClientError, MediaIngestionError, OCRClientError
+from router.ingestion.asr import ASRClient, ASRResult, build_asr_client
+from router.ingestion.cache import CachingASRClient, CachingOCRClient
 from router.ingestion.categories import VOICE_NOTE_CATEGORY, validate_image_category
 from router.ingestion.media import lookup_media_file_path
 from router.ingestion.message import NormalizedMessage
-from router.ingestion.ocr import OCRClient, OCRResult
+from router.ingestion.ocr import OCRClient, OCRResult, build_ocr_client
 
 _FAILURE_CONFIDENCE_CAP = 0.2
 """The ceiling media_confidence is clamped to whenever OCR/ASR could not
@@ -209,3 +215,36 @@ def _normalize_voice_message(
         category=VOICE_NOTE_CATEGORY,
         failure_reason=None,
     )
+
+
+def run_media_ingestion(
+    bundle: DatasetBundle,
+    dataset_dir: Path,
+    ocr_client: OCRClient | None = None,
+    asr_client: ASRClient | None = None,
+) -> dict[str, NormalizedMessage]:
+    """Normalize every message in bundle.messages; nothing is silently dropped.
+
+    Defaults to build_ocr_client()/build_asr_client() when a client is not
+    supplied, then wraps whichever client is in play (default-built or
+    caller-supplied) in the matching caching decorator before any message
+    is processed, so cache scope is exactly this one batch run. Raises
+    MediaIngestionError if the produced count does not match
+    len(bundle.messages) — a missing entry here would otherwise surface
+    only as a mysterious gap much later, in the final output.
+    """
+    ocr_client = CachingOCRClient(ocr_client or build_ocr_client())
+    asr_client = CachingASRClient(asr_client or build_asr_client())
+
+    normalized = {
+        message["message_id"]: normalize_message(message, bundle, dataset_dir, ocr_client, asr_client)
+        for message in bundle.messages.to_dict("records")
+    }
+
+    if len(normalized) != len(bundle.messages):
+        raise MediaIngestionError(
+            f"run_media_ingestion produced {len(normalized)} normalized message(s) for "
+            f"{len(bundle.messages)} message(s) — bundle.messages likely has a duplicate message_id."
+        )
+
+    return normalized
