@@ -26,6 +26,9 @@ def score_message(
     message: dict,
     business_accounts: pd.DataFrame,
     forward_chain_open_rate: float | None,
+    *,
+    business_index: dict[str, dict] | None = None,
+    verified_brand_names: frozenset[str] | None = None,
 ) -> SafetyVerdict:
     """Score one message for safety risk, independent of any receiving user.
 
@@ -37,6 +40,15 @@ def score_message(
     business metadata. forward_chain_open_rate is an aggregate float (or
     None) for high-forwarded_count messages across the full user base.
 
+    business_index and verified_brand_names are optional batch-hoisting
+    hints: both are invariant across every message in a run, so
+    run_safety_gate computes each once (via build_business_index and
+    _verified_brand_names) and passes them through here instead of
+    re-deriving them from business_accounts on every call. Pass neither
+    (the default) to have score_message derive them itself — the right
+    choice when scoring a single message in isolation, where the cost of
+    one derivation is negligible.
+
     Borderline contract: whenever the winning risk category's combined
     signal weight is > 0, risk_type/risk_confidence/risk_signals are
     populated from it regardless of whether that weight reaches its
@@ -44,8 +56,14 @@ def score_message(
     risk_confidence > 0 is a valid, expected verdict shape.
     """
     safety_message = SafetyMessage.from_record(message)
-    business = _lookup_business(safety_message.business_id, business_accounts)
-    verified_brand_names = _verified_brand_names(business_accounts)
+    if business_index is None:
+        business = _lookup_business(safety_message.business_id, business_accounts)
+    elif safety_message.business_id:
+        business = business_index.get(safety_message.business_id)
+    else:
+        business = None
+    if verified_brand_names is None:
+        verified_brand_names = _verified_brand_names(business_accounts)
     message_text = safety_message.message_text
     forwarded_count = _parse_forwarded_count(safety_message.forwarded_count)
 
@@ -140,22 +158,28 @@ def compute_forward_chain_open_rate(
 def run_safety_gate(bundle: DatasetBundle) -> dict[str, SafetyVerdict]:
     """Score every message in bundle.messages; nothing is silently dropped.
 
-    Computes forward_chain_open_rate once (via
-    compute_forward_chain_open_rate on bundle.message_history/
-    message_events), then calls score_message once per row of
-    bundle.messages, returning a dict keyed by message_id. The returned
-    dict has exactly one entry per row of bundle.messages — a missing
-    verdict here would otherwise surface only as a mysterious gap much
-    later, in P5's output. Raises SafetyGateError (a DatasetError, so
-    code/main.py's existing error handling catches it) rather than
-    crashing with an unhandled exception if that guarantee cannot hold.
+    Computes forward_chain_open_rate, a business_id -> row index, and the
+    verified-brand-name set once each (all invariant across the batch),
+    then calls score_message once per row of bundle.messages, returning a
+    dict keyed by message_id. The returned dict has exactly one entry per
+    row of bundle.messages — a missing verdict here would otherwise
+    surface only as a mysterious gap much later, in P5's output. Raises
+    SafetyGateError (a DatasetError, so code/main.py's existing error
+    handling catches it) rather than crashing with an unhandled exception
+    if that guarantee cannot hold.
     """
     forward_chain_open_rate = compute_forward_chain_open_rate(
         bundle.message_history, bundle.message_events
     )
+    business_index = build_business_index(bundle.business_accounts)
+    verified_brand_names = _verified_brand_names(bundle.business_accounts)
     verdicts = {
         message["message_id"]: score_message(
-            message, bundle.business_accounts, forward_chain_open_rate
+            message,
+            bundle.business_accounts,
+            forward_chain_open_rate,
+            business_index=business_index,
+            verified_brand_names=verified_brand_names,
         )
         for message in bundle.messages.to_dict("records")
     }
@@ -178,6 +202,18 @@ def _lookup_business(business_id: str, business_accounts: pd.DataFrame) -> dict 
     if matches.empty:
         return None
     return matches.iloc[0].to_dict()
+
+
+def build_business_index(business_accounts: pd.DataFrame) -> dict[str, dict]:
+    """A business_id -> row-dict index, built once and reused across a batch.
+
+    On a duplicate business_id, keeps the first occurrence — matching
+    _lookup_business's own "first match" behavior, so scoring the same
+    message with or without a precomputed index gives an identical
+    result.
+    """
+    deduplicated = business_accounts.drop_duplicates(subset="business_id", keep="first")
+    return {row["business_id"]: row for row in deduplicated.to_dict("records")}
 
 
 def _verified_brand_names(business_accounts: pd.DataFrame) -> frozenset[str]:

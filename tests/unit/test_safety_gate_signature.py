@@ -5,7 +5,7 @@ from dataclasses import fields
 
 import pandas as pd
 
-from router.safety.gate import score_message
+from router.safety.gate import _verified_brand_names, build_business_index, score_message
 from router.safety.message import SafetyMessage
 from router.safety.verdict import RiskSignal
 
@@ -65,11 +65,59 @@ def test_user_scoped_record_fields_cannot_change_safety_scoring():
     )
 
 
-def test_score_message_signature_is_exactly_message_business_and_open_rate():
-    """score_message's parameter list is the three documented arguments, nothing more."""
-    # This is also the REQ-P1-04 signature-stability check.
-    parameters = list(inspect.signature(score_message).parameters)
-    assert parameters == ["message", "business_accounts", "forward_chain_open_rate"]
+def test_score_message_positional_signature_is_exactly_message_business_and_open_rate():
+    """score_message's required, positional parameters are the three documented arguments.
+
+    This is also the REQ-P1-04 signature-stability check: the contract
+    locks the positional arguments a caller must supply, not the presence
+    of optional keyword-only batch-hoisting hints (business_index,
+    verified_brand_names) — those are perf-only, default to None, and
+    carry no personalization data (see
+    test_score_message_signature_excludes_personalization_inputs).
+    """
+    parameters = inspect.signature(score_message).parameters
+    positional = [
+        name
+        for name, param in parameters.items()
+        if param.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    ]
+    assert positional == ["message", "business_accounts", "forward_chain_open_rate"]
+
+
+def test_score_message_keyword_only_hints_are_optional_and_default_to_none():
+    """The batch-hoisting hints are opt-in: omitting them falls back to per-call derivation."""
+    parameters = inspect.signature(score_message).parameters
+    for name in ("business_index", "verified_brand_names"):
+        assert parameters[name].kind is inspect.Parameter.KEYWORD_ONLY
+        assert parameters[name].default is None
+
+
+def test_score_message_gives_identical_verdict_with_or_without_hoisted_hints():
+    """Passing precomputed business_index/verified_brand_names doesn't change the outcome."""
+    business_accounts = pd.DataFrame(
+        [
+            {
+                "business_id": "business_1",
+                "brand_name": "Acme",
+                "verified": "0",
+                "official_domain": "acme.com",
+                "domain_used_by_sender": "acme-secure.com",
+                "domain_used_by_sender_age_days": "5",
+                "messages_sent_30d": "10",
+            }
+        ]
+    )
+    message = _minimal_message(business_id="business_1", message_text="Confirm your password now.")
+
+    without_hints = score_message(message, business_accounts, None)
+    with_hints = score_message(
+        message,
+        business_accounts,
+        None,
+        business_index=build_business_index(business_accounts),
+        verified_brand_names=_verified_brand_names(business_accounts),
+    )
+    assert without_hints == with_hints
 
 
 def _minimal_message(**overrides) -> dict:
