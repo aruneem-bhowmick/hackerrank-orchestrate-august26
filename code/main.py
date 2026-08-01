@@ -6,6 +6,7 @@ from pathlib import Path
 from router.dataset.contract import validate_row_count_parity
 from router.dataset.loader import load_dataset_bundle
 from router.dataset.timeline import build_user_timelines
+from router.decision.pipeline import run_decision_fusion
 from router.errors import DatasetError
 from router.ingestion.pipeline import run_media_ingestion
 from router.personalization.pipeline import run_personalization
@@ -23,6 +24,7 @@ def main(dataset_dir: Path = DEFAULT_DATASET_DIR) -> int:
         normalized = run_media_ingestion(bundle, dataset_dir)
         verdicts = run_safety_gate(bundle, normalized)
         evidence = run_personalization(normalized, bundle, timelines)
+        decisions = run_decision_fusion(bundle, normalized, verdicts, evidence)
     except DatasetError as exc:
         print(f"Dataset validation failed: {exc}", file=sys.stderr)
         return 1
@@ -52,6 +54,11 @@ def main(dataset_dir: Path = DEFAULT_DATASET_DIR) -> int:
         f"Personalization: {evidence_found} message(s) have relevant evidence; "
         f"{mention_overrides} muted-group mention override(s) detected."
     )
+
+    notify_count = sum(record.action == "notify" for record in decisions.values())
+    digest_count = sum(record.action == "digest" for record in decisions.values())
+    mute_count = sum(record.action == "mute" for record in decisions.values())
+    print(f"Decision fusion: {notify_count} notify, {digest_count} digest, {mute_count} mute.")
     return 0
 
 

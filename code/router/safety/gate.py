@@ -68,7 +68,7 @@ def score_message(
     if verified_brand_names is None:
         verified_brand_names = _verified_brand_names(business_accounts)
     message_text = safety_message.message_text
-    forwarded_count = _parse_forwarded_count(safety_message.forwarded_count)
+    forwarded_count = parse_forwarded_count(safety_message.forwarded_count)
 
     scam_matches = detect_scam_signals(message_text, business, verified_brand_names)
     scam_confidence = round(
@@ -110,7 +110,7 @@ def score_message(
     )
 
 
-def _parse_forwarded_count(raw: str) -> int:
+def parse_forwarded_count(raw: str) -> int:
     """Parse messages.csv's forwarded_count field, defaulting blank to 0."""
     return int(raw) if raw.strip().isdigit() else 0
 
@@ -151,7 +151,7 @@ def compute_forward_chain_open_rate(
 
     merged = message_history.merge(message_events, on="message_id", how="inner")
     high_forward = merged[
-        merged["forwarded_count"].apply(_parse_forwarded_count) >= FORWARD_CHAIN_COUNT_THRESHOLD
+        merged["forwarded_count"].apply(parse_forwarded_count) >= FORWARD_CHAIN_COUNT_THRESHOLD
     ]
     if high_forward.empty:
         return None
