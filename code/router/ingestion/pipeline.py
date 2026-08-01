@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import Mapping
 
 from router.dataset.loader import DatasetBundle
-from router.errors import OCRClientError
+from router.errors import ASRClientError, OCRClientError
+from router.ingestion.asr import ASRClient, ASRResult
 from router.ingestion.media import lookup_media_file_path
 from router.ingestion.message import NormalizedMessage
 from router.ingestion.ocr import OCRClient, OCRResult
@@ -15,23 +16,35 @@ path — low enough to signal "do not trust this," non-zero so a client that
 did offer some confidence before failing is not flattened to an
 indistinguishable zero."""
 
+_VOICE_NOTE_CATEGORY = "voice_note"
+"""The fixed media_category for every voice message. Centralized in
+router.ingestion.categories as of REQ-P2-03; kept as a private literal here
+in the meantime so this module has no forward dependency on a module that
+does not exist yet."""
+
 
 def normalize_message(
-    message: Mapping[str, object], bundle: DatasetBundle, dataset_dir: Path, ocr_client: OCRClient
+    message: Mapping[str, object],
+    bundle: DatasetBundle,
+    dataset_dir: Path,
+    ocr_client: OCRClient,
+    asr_client: ASRClient,
 ) -> NormalizedMessage:
     """Normalize one messages.csv row (as a dict/record) to a NormalizedMessage.
 
     Dispatches on media_type: "" passes message_text through unchanged;
-    "image" runs OCR and combines the result with the caption. "voice"
-    raises NotImplementedError until REQ-P2-02 adds ASR support. Never
-    raises for a well-formed image row regardless of OCR outcome — see the
-    REQ-P2-04 fallback contract implemented in _normalize_image_message.
+    "image" runs OCR and combines the result with the caption; "voice"
+    runs ASR and returns the transcript alone (voice messages carry no
+    native caption) through the exact same NormalizedMessage shape — no
+    forked downstream logic. Never raises for a well-formed row regardless
+    of OCR/ASR outcome — see the REQ-P2-04 fallback contract implemented
+    in _normalize_image_message/_normalize_voice_message.
     """
     media_type = _string(message, "media_type")
     if media_type == "image":
         return _normalize_image_message(message, bundle, dataset_dir, ocr_client)
     if media_type == "voice":
-        raise NotImplementedError("voice message ingestion lands in REQ-P2-02")
+        return _normalize_voice_message(message, bundle, dataset_dir, asr_client)
     return _normalize_text_message(message)
 
 
@@ -141,4 +154,58 @@ def _normalize_image_message(
     text = f"{caption}\n{extracted}".strip() if caption else extracted
     return _build_normalized_message(
         message, text=text, confidence=result.confidence, failure=False, category=None, failure_reason=None
+    )
+
+
+def _normalize_voice_message(
+    message: Mapping[str, object], bundle: DatasetBundle, dataset_dir: Path, asr_client: ASRClient
+) -> NormalizedMessage:
+    """Build a NormalizedMessage for a voice message, via its ASR transcript alone.
+
+    Voice messages carry no native caption (message_text is always blank
+    per the input schema), so normalized_text is the transcript on
+    success or "" on any failure — there is nothing else to fall back to.
+    media_category is always _VOICE_NOTE_CATEGORY, success or failure —
+    unlike an image, a voice message's category is never unknown, only
+    its transcript is.
+    """
+    media_id = _string(message, "media_id")
+
+    audio_path = (
+        lookup_media_file_path(media_id, bundle.voice_notes, "voice_note_id", dataset_dir)
+        if media_id
+        else None
+    )
+    if audio_path is None:
+        reason = (
+            f"no voice_notes.csv record found for media_id '{media_id}'"
+            if media_id
+            else "voice message has no media_id"
+        )
+        return _fallback_normalized_message(
+            message, text="", reason=reason, category=_VOICE_NOTE_CATEGORY
+        )
+
+    try:
+        result = asr_client.transcribe(audio_path)
+    except ASRClientError as exc:
+        result = ASRResult(text="", confidence=0.0, failure=True, failure_reason=str(exc))
+
+    if result.failure or not result.text.strip():
+        return _build_normalized_message(
+            message,
+            text="",
+            confidence=min(result.confidence, _FAILURE_CONFIDENCE_CAP),
+            failure=True,
+            category=_VOICE_NOTE_CATEGORY,
+            failure_reason=result.failure_reason or "ASR produced no usable transcript",
+        )
+
+    return _build_normalized_message(
+        message,
+        text=result.text.strip(),
+        confidence=result.confidence,
+        failure=False,
+        category=_VOICE_NOTE_CATEGORY,
+        failure_reason=None,
     )
