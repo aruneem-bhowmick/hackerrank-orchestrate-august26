@@ -26,13 +26,13 @@ def _image_message(**overrides) -> dict[str, object]:
     return message
 
 
-def test_image_normalization_concatenates_caption_and_ocr_text(load_fixture_bundle):
+def test_image_normalization_concatenates_caption_and_ocr_text(load_fixture_bundle, fixtures_dir):
     """Image content augments the WhatsApp caption rather than replacing it."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
         _image_message(),
         bundle,
-        bundle.images.parent,
+        fixtures_dir / "dataset_valid",
         FakeOCRClient(OCRResult("Read this poster", 0.81, "poster_promo", False, None)),
         FakeASRClient(),
     )
@@ -43,13 +43,13 @@ def test_image_normalization_concatenates_caption_and_ocr_text(load_fixture_bund
     assert result.media_failure is False
 
 
-def test_image_normalization_uses_ocr_text_when_there_is_no_caption(load_fixture_bundle):
+def test_image_normalization_uses_ocr_text_when_there_is_no_caption(load_fixture_bundle, fixtures_dir):
     """An image without a caption still has usable downstream text from OCR."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
         _image_message(message_text=""),
         bundle,
-        bundle.images.parent,
+        fixtures_dir / "dataset_valid",
         FakeOCRClient(OCRResult("Poster-only text", 0.7, "document_photo", False, None)),
         FakeASRClient(),
     )
@@ -58,13 +58,13 @@ def test_image_normalization_uses_ocr_text_when_there_is_no_caption(load_fixture
     assert result.media_failure is False
 
 
-def test_image_normalization_preserves_caption_when_ocr_client_raises(load_fixture_bundle):
+def test_image_normalization_preserves_caption_when_ocr_client_raises(load_fixture_bundle, fixtures_dir):
     """An OCR outage records the fallback without discarding native message text."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
         _image_message(),
         bundle,
-        bundle.images.parent,
+        fixtures_dir / "dataset_valid",
         FakeOCRClient(error=OCRClientError("service unavailable")),
         FakeASRClient(),
     )
@@ -75,13 +75,13 @@ def test_image_normalization_preserves_caption_when_ocr_client_raises(load_fixtu
     assert result.media_failure_reason == "service unavailable"
 
 
-def test_image_normalization_discards_off_taxonomy_categories(load_fixture_bundle):
+def test_image_normalization_discards_off_taxonomy_categories(load_fixture_bundle, fixtures_dir):
     """Model-provided categories cannot leak beyond the fixed internal contract."""
     bundle = load_fixture_bundle("dataset_valid")
     result = normalize_message(
         _image_message(),
         bundle,
-        bundle.images.parent,
+        fixtures_dir / "dataset_valid",
         FakeOCRClient(OCRResult("Text", 0.5, "invoice", False, None)),
         FakeASRClient(),
     )
