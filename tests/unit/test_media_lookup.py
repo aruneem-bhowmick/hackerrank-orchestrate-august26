@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from router.ingestion.media import lookup_media_file_path, resolve_media_path
 
@@ -34,3 +35,11 @@ def test_lookup_media_file_path_returns_none_for_blank_or_unknown_ids(tmp_path):
 
     assert lookup_media_file_path("", table, "voice_note_id", tmp_path) is None
     assert lookup_media_file_path("vn_missing", table, "voice_note_id", tmp_path) is None
+
+
+@pytest.mark.parametrize("file_path", ["", "   ", float("nan"), pd.NA, None])
+def test_lookup_media_file_path_returns_none_for_blank_or_non_string_paths(tmp_path, file_path):
+    """Invalid media-table paths preserve the helper's never-raises fallback contract."""
+    table = pd.DataFrame([{"image_id": "img_1", "file_path": file_path}])
+
+    assert lookup_media_file_path("img_1", table, "image_id", tmp_path) is None

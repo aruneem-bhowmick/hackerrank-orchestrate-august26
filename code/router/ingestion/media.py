@@ -28,4 +28,7 @@ def lookup_media_file_path(
     matches = media_table.loc[media_table[id_column] == media_id]
     if matches.empty:
         return None
-    return resolve_media_path(dataset_dir, matches.iloc[0]["file_path"])
+    file_path = matches.iloc[0]["file_path"]
+    if not isinstance(file_path, str) or not file_path.strip():
+        return None
+    return resolve_media_path(dataset_dir, file_path)

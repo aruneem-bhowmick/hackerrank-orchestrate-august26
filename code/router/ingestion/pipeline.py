@@ -237,7 +237,9 @@ def run_media_ingestion(
     asr_client = CachingASRClient(asr_client or build_asr_client())
 
     normalized = {
-        message["message_id"]: normalize_message(message, bundle, dataset_dir, ocr_client, asr_client)
+        _string(message, "message_id"): normalize_message(
+            message, bundle, dataset_dir, ocr_client, asr_client
+        )
         for message in bundle.messages.to_dict("records")
     }
 
