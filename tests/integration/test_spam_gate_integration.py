@@ -76,6 +76,9 @@ def test_blank_forwarded_count_parses_as_zero_and_does_not_raise():
 
 def test_category_selection_picks_dominant_type():
     """When both a weak scam signal and a stronger spam signal fire, spam wins."""
+    # verified="0": repetitive_business_promotion/high_volume_broadcast only
+    # apply to an unverified business (a verified sender's promotional
+    # volume is a personalization concern, not a safety-gate spam signal).
     business_accounts = pd.DataFrame(
         [
             {
@@ -83,7 +86,7 @@ def test_category_selection_picks_dominant_type():
                 "display_name": "Mega Mart",
                 "brand_name": "Mega Mart",
                 "category": "retail",
-                "verified": "1",
+                "verified": "0",
                 "official_domain": "megamart.example",
                 "domain_used_by_sender": "megamart.example",
                 "account_age_days": "1000",

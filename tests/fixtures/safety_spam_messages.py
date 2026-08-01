@@ -25,7 +25,7 @@ LOW_VOLUME_PROMO_BUSINESS: dict = {
     "display_name": "Corner Cafe",
     "brand_name": "Corner Cafe",
     "category": "food",
-    "verified": "1",
+    "verified": "0",
     "official_domain": "cornercafe.example",
     "domain_used_by_sender": "cornercafe.example",
     "account_age_days": "800",
@@ -41,6 +41,20 @@ HIGH_VOLUME_PROMO_BUSINESS: dict = {
     "brand_name": "Mega Mart",
     "messages_sent_30d": "5000",
 }
+
+VERIFIED_HIGH_VOLUME_PROMO_BUSINESS: dict = {
+    **HIGH_VOLUME_PROMO_BUSINESS,
+    "business_id": "business_912",
+    "display_name": "Thrillophilia",
+    "brand_name": "Thrillophilia",
+    "verified": "1",
+}
+"""Modeled on the real dataset's business_092 (Thrillophilia, verified,
+messages_sent_30d in the thousands): dataset/sample_messages.csv never
+labels a verified business's promotional message message_type "spam" —
+verified promotions are muted, if at all, via personalization and labeled
+"promotion" instead (e.g. sample_msg_007, sample_msg_015, sample_msg_047).
+"""
 
 SPAM_FIXTURES: tuple[SpamFixtureCase, ...] = (
     SpamFixtureCase(
@@ -91,7 +105,7 @@ SPAM_FIXTURES: tuple[SpamFixtureCase, ...] = (
         expected_is_blocked=True,
     ),
     SpamFixtureCase(
-        name="repetitive_promotion_alone_stays_borderline",
+        name="unverified_repetitive_promotion_alone_stays_borderline",
         message_text="New here? 50% Off Won't Wait! Get 50% off today with code TRY50.",
         forwarded_count=0,
         business=LOW_VOLUME_PROMO_BUSINESS,
@@ -100,7 +114,7 @@ SPAM_FIXTURES: tuple[SpamFixtureCase, ...] = (
         expected_is_blocked=False,
     ),
     SpamFixtureCase(
-        name="repetitive_promotion_plus_high_volume_blocks",
+        name="unverified_repetitive_promotion_plus_high_volume_blocks",
         message_text="New here? 50% Off Won't Wait! Get 50% off today with code TRY50.",
         forwarded_count=0,
         business=HIGH_VOLUME_PROMO_BUSINESS,
@@ -109,12 +123,21 @@ SPAM_FIXTURES: tuple[SpamFixtureCase, ...] = (
         expected_is_blocked=True,
     ),
     SpamFixtureCase(
-        name="high_volume_broadcast_alone_stays_borderline",
+        name="unverified_high_volume_broadcast_alone_stays_borderline",
         message_text="Your monthly statement is ready to view.",
         forwarded_count=0,
         business=HIGH_VOLUME_PROMO_BUSINESS,
         forward_chain_open_rate=None,
         expected_signal_names=frozenset({"high_volume_broadcast"}),
+        expected_is_blocked=False,
+    ),
+    SpamFixtureCase(
+        name="verified_high_volume_promotion_is_not_flagged_as_spam",
+        message_text="New here? 50% Off Won't Wait! Get 50% off today with code TRY50.",
+        forwarded_count=0,
+        business=VERIFIED_HIGH_VOLUME_PROMO_BUSINESS,
+        forward_chain_open_rate=None,
+        expected_signal_names=frozenset(),
         expected_is_blocked=False,
     ),
 )

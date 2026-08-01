@@ -228,7 +228,11 @@ def detect_spam_signals(
 
     low_forward_chain_engagement only fires alongside high_forwarded_count
     — it is a corroborator for an already-high forwarded_count, not
-    independent evidence on its own. Never raises for well-formed input.
+    independent evidence on its own. repetitive_business_promotion and
+    high_volume_broadcast only apply to an unverified business — a
+    verified business's promotional volume is a message_type "promotion"
+    / personalization concern, not a safety-gate spam signal. Never
+    raises for well-formed input.
     """
     signals: list[RiskSignal] = []
     text = message_text or ""
@@ -267,7 +271,14 @@ def detect_spam_signals(
                 )
             )
 
-    if business is not None:
+    # Promotional volume from a verified business is a personalization
+    # decision (message_type "promotion", opted-in/out, dismissal
+    # history), not a safety-gate spam signal — dataset/sample_messages.csv
+    # never labels a verified business's message message_type "spam";
+    # every spam-labeled row has an unverified sender, while verified
+    # senders' muted promotions are labeled "promotion" with a
+    # personalization-driven reason instead.
+    if business is not None and business.get("verified", "").strip() == "0":
         if _REPETITIVE_PROMOTION_PATTERN.search(text):
             signals.append(
                 RiskSignal(
