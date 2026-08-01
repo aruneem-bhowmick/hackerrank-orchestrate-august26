@@ -13,6 +13,8 @@ from router.dataset.loader import load_dataset_bundle  # noqa: E402
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(FIXTURES_DIR) not in sys.path:
+    sys.path.insert(0, str(FIXTURES_DIR))
 
 
 @pytest.fixture
