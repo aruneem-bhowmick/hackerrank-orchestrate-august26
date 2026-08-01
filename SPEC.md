@@ -115,7 +115,32 @@ requires a JSON-style array must explicitly use `list(verdict.risk_signals)`.
   retrieval_method: str, personalization_signals: {...} }
 ```
 
-### 1.5 Output (`output.csv`)
+### 1.5 Internal — Decision Record (output of P4)
+```
+{
+  message_id, action, message_type, reason, confidence,
+  evidence_message_ids: tuple[str, ...],
+  safety_confidence: float, value_score: float, urgency_score: float,
+  signal_agreement: float, decision_basis: tuple[str, ...],
+}
+```
+
+`action`, `message_type`, `reason`, `confidence`, and `evidence_message_ids` are exactly
+the fields P5 serializes into `output.csv` (§1.6) for this `message_id` — P4 is the last
+phase to set their values; P5 only validates and writes them, it does not recompute them.
+
+The remaining fields are the "loggable intermediate state" REQ-P4-01 requires and are
+never written to `output.csv`: `safety_confidence` is the safety gate's own
+`risk_confidence` (0.0 when `risk_type` is `None`); `value_score`/`urgency_score` are P4's
+fused [0, 1] scores after applying P3's `value_score_adjustment`/`urgency_score_adjustment`
+and any borderline-risk penalty (REQ-P1-06); `signal_agreement` is the [0, 1] measure of
+whether the safety verdict and the personalization signals point the same direction
+(REQ-P4-02); `decision_basis` is an immutable tuple of short, named component identifiers
+(e.g. `"safety_block:scam"`, `"group_muted_no_mention_override"`,
+`"evidence_dismissal_penalty"`) that REQ-P4-04's `reason` string is built from — never a
+free-text blob assembled ad hoc at reason-generation time.
+
+### 1.6 Output (`output.csv`)
 Exact columns/order per `problem_statement.md` §Required output:
 `message_id, action, message_type, reason, confidence, evidence_message_ids`
 
