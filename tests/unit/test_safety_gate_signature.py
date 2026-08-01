@@ -67,6 +67,7 @@ def test_user_scoped_record_fields_cannot_change_safety_scoring():
 
 def test_score_message_signature_is_exactly_message_business_and_open_rate():
     """score_message's parameter list is the three documented arguments, nothing more."""
+    # This is also the REQ-P1-04 signature-stability check.
     parameters = list(inspect.signature(score_message).parameters)
     assert parameters == ["message", "business_accounts", "forward_chain_open_rate"]
 

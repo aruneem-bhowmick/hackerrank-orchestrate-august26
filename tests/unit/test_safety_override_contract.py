@@ -7,8 +7,6 @@ one axis that could plausibly leak such a signal through score_message's
 existing parameters and confirm the verdict is unaffected.
 """
 
-import inspect
-
 import pandas as pd
 
 from router.safety.gate import score_message
@@ -22,12 +20,6 @@ _BUSINESS_ACCOUNTS_COLUMNS = [
     "domain_used_by_sender_age_days",
     "messages_sent_30d",
 ]
-
-
-def test_signature_still_excludes_personalization_after_full_phase():
-    """After every prompt in this phase, score_message's signature is unchanged."""
-    parameters = list(inspect.signature(score_message).parameters)
-    assert parameters == ["message", "business_accounts", "forward_chain_open_rate"]
 
 
 def test_identical_verdict_across_varying_business_popularity_field():
