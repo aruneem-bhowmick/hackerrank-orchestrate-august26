@@ -24,6 +24,8 @@ required" notice) — a bare keyword match would otherwise flag the
 negation itself as a request.
 """
 
+_NEGATION_CONTEXT_CHARACTERS = 40
+
 _SCAM_TEXT_PATTERNS: tuple[tuple[str, float, re.Pattern, str, re.Pattern | None], ...] = (
     (
         "payment_or_credential_request",
@@ -95,9 +97,12 @@ def detect_scam_signals(
     text = message_text or ""
 
     for name, weight, pattern, detail, negation_pattern in _SCAM_TEXT_PATTERNS:
-        if not pattern.search(text):
+        matches = tuple(pattern.finditer(text))
+        if not matches:
             continue
-        if negation_pattern is not None and negation_pattern.search(text):
+        if negation_pattern is not None and all(
+            _is_negated_credential_match(text, match, negation_pattern) for match in matches
+        ):
             continue
         signals.append(RiskSignal(name=name, weight=weight, detail=detail))
 
@@ -109,6 +114,15 @@ def detect_scam_signals(
     return signals
 
 
+def _is_negated_credential_match(
+    text: str, match: re.Match[str], negation_pattern: re.Pattern
+) -> bool:
+    """Return whether a credential keyword belongs to a nearby negated statement."""
+    start = max(0, match.start() - _NEGATION_CONTEXT_CHARACTERS)
+    end = min(len(text), match.end() + _NEGATION_CONTEXT_CHARACTERS)
+    return negation_pattern.search(text[start:end]) is not None
+
+
 def _detect_suspicious_link_or_domain(text: str, business: dict | None) -> list[RiskSignal]:
     """Flag a bare domain-like token that doesn't match the business's official domain."""
     tokens = _DOMAIN_TOKEN_PATTERN.findall(text)
@@ -116,7 +130,7 @@ def _detect_suspicious_link_or_domain(text: str, business: dict | None) -> list[
         return []
 
     official_domain = (business or {}).get("official_domain", "").strip().lower()
-    if official_domain and any(token.lower() == official_domain for token in tokens):
+    if official_domain and all(token.lower() == official_domain for token in tokens):
         return []
 
     if business is not None and official_domain:

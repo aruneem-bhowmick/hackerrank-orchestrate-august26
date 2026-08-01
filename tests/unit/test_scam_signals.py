@@ -2,7 +2,11 @@
 
 import pytest
 
-from fixtures.safety_scam_messages import SCAM_FIXTURES
+from fixtures.safety_scam_messages import (
+    ACME_BANK_VERIFIED_BRAND_NAMES,
+    SCAM_FIXTURES,
+    VERIFIED_ACME_BANK,
+)
 from router.safety.gate import score_message
 from router.safety.signals import detect_scam_signals
 from router.safety.thresholds import T_SCAM
@@ -41,6 +45,28 @@ def test_blank_business_fields_do_not_raise():
     }
     matches = detect_scam_signals("Hello there.", business, frozenset())
     assert matches == []
+
+
+def test_negation_only_suppresses_the_adjacent_credential_keyword():
+    """A later OTP request still fires after an earlier no-OTP statement."""
+    matches = detect_scam_signals(
+        "No payment or OTP is required for this delivery. Reply with your OTP now.",
+        None,
+        frozenset(),
+    )
+
+    assert {signal.name for signal in matches} == {"payment_or_credential_request"}
+
+
+def test_mixed_official_and_unfamiliar_domains_remain_suspicious():
+    """An official-domain token cannot suppress a different link in the same message."""
+    matches = detect_scam_signals(
+        "View your statement at acmebank.com, then verify at acmebank-secure.xyz.",
+        VERIFIED_ACME_BANK,
+        ACME_BANK_VERIFIED_BRAND_NAMES,
+    )
+
+    assert "suspicious_link_or_domain" in {signal.name for signal in matches}
 
 
 def test_threshold_boundary_blocks_at_exactly_t_scam():
