@@ -100,7 +100,11 @@ normalized_text == <caption for images, "" for voice, per ADR-007>
      the relevant env var unset, then their returned client's
      `extract`/`transcribe` called directly — confirm the raised
      `OCRClientError`/`ASRClientError` message names the missing variable
-     specifically (not a generic "something went wrong").
+     specifically (not a generic "something went wrong"). Pass each same
+     client through `normalize_message` with a matching media row and
+     assert `media_failure=True`, `media_confidence <= 0.2`, a non-empty
+     failure reason, and caption-only image text or an empty voice
+     transcript.
    - **Missing media record**: an image/voice message whose `media_id`
      has no row in `bundle.images`/`bundle.voice_notes`.
    - **Blank media_id**: an image/voice message with `media_id == ""`.

@@ -141,9 +141,11 @@ def normalize_message(
    - Else call `asr_client.transcribe(audio_path)` inside
      `try/except ASRClientError as exc`; on the exception, build the same
      shape as a client-reported failure: `text=""`,
-     `reason=str(exc)`, `confidence=0.0`.
+     `reason=_failure_reason(str(exc), "ASR request failed")`,
+     `confidence=0.0`.
    - On a successful `ASRResult` with `failure=True` (or blank text):
-     `text=""`, `reason=result.failure_reason`,
+     `text=""`,
+     `reason=_failure_reason(result.failure_reason, "ASR produced no usable transcript")`,
      `confidence=min(result.confidence, _FAILURE_CONFIDENCE_CAP)` (reuse
      REQ-P2-01's `0.2` constant — import it, do not redefine a second
      magic number for the same concept).

@@ -202,10 +202,12 @@ def normalize_message(
      "no images.csv record found for media_id '<id>'">, category=None)`.
    - Else call `ocr_client.extract(image_path)` inside a `try/except
      OCRClientError as exc`; on the exception, treat it exactly like a
-     client-reported failure: `text=message_text`, `reason=str(exc)`,
+     client-reported failure: `text=message_text`,
+     `reason=_failure_reason(str(exc), "OCR request failed")`,
      `category=None`, `confidence=0.0`.
    - On a successful `OCRResult` with `failure=True` (or blank text):
-     `text=message_text` (caption alone), `reason=result.failure_reason`,
+     `text=message_text` (caption alone),
+     `reason=_failure_reason(result.failure_reason, "OCR produced no readable text")`,
      `category=None` (unused until REQ-P2-03), `confidence=min(result.confidence,
      0.2)` — see REQ-P2-04's prompt for why 0.2 and the named constant it
      introduces; for this prompt, inline a private

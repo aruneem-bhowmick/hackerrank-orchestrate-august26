@@ -8,10 +8,9 @@
   P3 consumes this prompt's `run_media_ingestion` output.
 
 ## Objective
-`dataset/messages.csv` + `dataset/message_history.csv` reference the same
-`media_id` more than once (`img_008` 4 times, `img_010`/`img_003` 3 times
-each, per ADR-007's dataset inspection) — every one of those repeats would
-otherwise cost a redundant paid OCR/ASR call. This prompt adds a
+`dataset/messages.csv` references several `media_id` values more than once
+(`img_008` 3 times, `img_010`/`img_003` 2 times each) — each repeat within
+one routing batch would otherwise cost a redundant paid OCR/ASR call. This prompt adds a
 media-id-scoped cache wrapping the `OCRClient`/`ASRClient` boundary (not a
 change to `normalize_message` itself), and the batch entrypoint,
 `run_media_ingestion`, that scores every row of `bundle.messages` and wires
