@@ -1,0 +1,56 @@
+---
+description: Message Notification Router — spec-driven workflow for this repo
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Orchestrate project rules
+
+Read `SPEC.md` at the repo root before editing anything. It is the canonical,
+REQ-tagged requirements document — shared across Claude Code (`CLAUDE.md`),
+Codex (`AGENTS.md`), and Cursor (this file). Do not restate or reinvent
+requirements; if something here conflicts with `SPEC.md`, `SPEC.md` wins.
+
+## Phase-gated workflow
+
+Follow the pipeline in `SPEC.md` §0/§2 in order:
+P0 Data Load/Validate → P1 Safety Gate → P2 Multimodal Ingestion →
+P3 Personalization/Retrieval → P4 Decision Fusion/Confidence →
+P5 Output Generation/Validation.
+
+Do not implement a later phase before the current phase's REQ items are done
+and smoke-tested. Inspect the actual CSVs in `dataset/` before assuming
+schema — don't rely on the README's prose description alone.
+
+## Phase planning
+
+When asked to plan, scaffold, or generate implementation prompts for a
+phase, use `.agents/skills/orchestrate-phase-planner/SKILL.md`.
+
+## REQ traceability
+
+Every non-trivial function should be attributable to a REQ ID from `SPEC.md`.
+Prefer naming/comments that make the REQ ID discoverable via search.
+
+## Commit hygiene
+
+No AI attribution in commits, PR descriptions, or code comments. Reference
+REQ IDs in commit messages where relevant.
+
+## Cross-tool continuity
+
+This repo is also worked on with Claude Code and Codex depending on rate
+limits. Leave the working tree resumable by another tool from `SPEC.md` +
+repo state alone — don't leave a phase half-applied without a clear note.
+
+## Secrets
+
+Read API keys from environment variables only. Never hardcode a key or write
+one into any file in this repo, including scratch scripts.
+
+## Transcript logging
+
+Do not touch or remove the `AGENTS.md` transcript-logging behavior — it's a
+required submission artifact per `README.md`, independent of which tool is
+currently active.
