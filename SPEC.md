@@ -28,8 +28,8 @@ phase can be swapped (rules ↔ model) without breaking downstream phases.
 
 ```
 P0 Data Load/Validate
-  → P1 Safety Gate (user-independent)
-    → P2 Multimodal Ingestion (OCR/ASR normalization to text)
+  → P2 Multimodal Ingestion (OCR/ASR normalization to text)
+    → P1 Safety Gate (user-independent)
       → P3 Personalization & Evidence Retrieval
         → P4 Decision Fusion & Confidence Calibration
           → P5 Output Generation & Validation
@@ -449,6 +449,19 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   REQ-P2-03's example list, plus an `unclassified` fallback the vision model
   may return when a coarse bucket genuinely doesn't fit — never a fabricated
   or off-taxonomy string.
+
+- **ADR-008** (2026-08-01): Final safety scoring consumes normalized message
+  text after OCR/ASR, but before any receiver-specific retrieval or scoring.
+  The prior raw-text-only ordering left image-only and voice-only phishing
+  content invisible to the safety gate. The normalized message contributes
+  only `normalized_text`; the gate reconstructs its four-field allowlist from
+  the loaded message's `message_id`, `business_id`, and `forwarded_count` plus
+  that text, so user identity, group state, and historical engagement remain
+  unavailable to detectors. Failed media ingestion supplies its documented
+  fallback text (caption for an image, blank for voice) rather than fabricated
+  content. This preserves the safety-before-personalization invariant while
+  ensuring readable media content receives the same risk screening as native
+  text.
 
 ---
 
