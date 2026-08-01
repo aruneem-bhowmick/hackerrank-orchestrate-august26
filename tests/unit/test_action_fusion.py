@@ -133,3 +133,26 @@ def test_quiet_hours_named_in_basis():
     result = fuse_action("msg_13", verdict, signals)
 
     assert "quiet_hours_suppressed" in result.decision_basis
+
+
+def test_content_urgency_boosts_urgency_score_and_is_named_in_basis():
+    """A message-content urgency signal raises urgency_score above baseline."""
+    verdict = make_verdict()
+    signals = make_signals()
+
+    without_urgency = fuse_action("msg_14", verdict, signals, content_urgency=False)
+    with_urgency = fuse_action("msg_15", verdict, signals, content_urgency=True)
+
+    assert with_urgency.urgency_score > without_urgency.urgency_score
+    assert "content_urgency_signal" in with_urgency.decision_basis
+    assert "content_urgency_signal" not in without_urgency.decision_basis
+
+
+def test_content_urgency_alone_can_be_the_only_basis_component():
+    """Content urgency with otherwise-neutral signals still names a real basis."""
+    verdict = make_verdict()
+    signals = make_signals()
+
+    result = fuse_action("msg_16", verdict, signals, content_urgency=True)
+
+    assert result.decision_basis == ("content_urgency_signal",)

@@ -84,6 +84,44 @@ def test_content_classification_buckets(text: str, expected: str):
     assert result == expected
 
 
+def test_image_caption_with_pickup_selects_promotion():
+    """An image caption mentioning pickup is a marketplace listing, not an event."""
+    verdict = make_verdict()
+    message = make_normalized_message(
+        conversation_type="group",
+        normalized_text="Photos attached, pickup near Gate 2 this weekend",
+        media_type="image",
+    )
+
+    result = select_message_type(verdict, "digest", message, make_signals(), None, 0)
+
+    assert result == "promotion"
+
+
+def test_text_only_pickup_mention_does_not_force_promotion():
+    """A plain-text casual mention of pickup (e.g. a carpool) is not a promotion."""
+    verdict = make_verdict()
+    message = make_normalized_message(
+        conversation_type="personal", normalized_text="checking if Sunday pickup still works for you"
+    )
+
+    result = select_message_type(verdict, "notify", message, make_signals(source_history_count=5), None, 0)
+
+    assert result == "personal"
+
+
+def test_direct_mention_with_request_alone_does_not_select_urgent():
+    """A mentioned, plain request for a response is personal, not urgent, by content."""
+    verdict = make_verdict()
+    message = make_normalized_message(
+        conversation_type="group", normalized_text="when you get 5 mins can you call? Nothing dramatic."
+    )
+
+    result = select_message_type(verdict, "notify", message, make_signals(direct_mention=True, source_history_count=3), None, 0)
+
+    assert result == "personal"
+
+
 def test_personal_conversation_with_no_history_selects_unknown():
     """A first-contact personal message with no clear content pattern is unknown."""
     verdict = make_verdict()

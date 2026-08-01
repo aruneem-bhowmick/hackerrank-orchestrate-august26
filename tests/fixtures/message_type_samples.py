@@ -10,6 +10,7 @@ def make_normalized_message(
     business_id: str = "",
     group_id: str = "",
     sender_user_id: str = "sender_1",
+    media_type: str = "",
 ) -> NormalizedMessage:
     """Build a NormalizedMessage with the fields message_type selection reads."""
     return NormalizedMessage(
@@ -20,7 +21,7 @@ def make_normalized_message(
         business_id=business_id,
         sender_user_id=sender_user_id,
         created_at="2026-08-01 10:00",
-        media_type="",
+        media_type=media_type,
         normalized_text=normalized_text,
         media_confidence=1.0,
         media_failure=False,
