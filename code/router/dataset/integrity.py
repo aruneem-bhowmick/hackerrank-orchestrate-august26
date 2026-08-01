@@ -7,6 +7,7 @@ organizer-only or hidden ground-truth file. Either kind of violation halts
 the run rather than being logged and skipped.
 """
 
+import os
 import re
 from pathlib import Path
 
@@ -79,24 +80,25 @@ def find_suspicious_files(repo_root: Path, dataset_dir: Path) -> list[Path]:
 
     Excludes dataset_dir's own contents (governed by the allowlist check
     instead), this project's own test fixtures at FIXTURES_EXCLUDED_PATH,
-    and any directory named in DEFAULT_EXCLUDED_DIR_NAMES, matched relative
-    to repo_root so an excluded name appearing above repo_root on disk does
-    not unintentionally exclude files inside repo_root.
+    and any directory named in DEFAULT_EXCLUDED_DIR_NAMES. Excluded
+    directories are pruned from the walk itself (via os.walk's in-place
+    dirnames mutation) rather than filtered out after visiting every file
+    beneath them, so large excluded trees like .git/ or node_modules/ are
+    never descended into at all.
     """
     matches: list[Path] = []
-    for path in repo_root.rglob("*"):
-        if path.is_dir():
-            continue
-        if dataset_dir in path.parents:
-            continue
-        relative_path = path.relative_to(repo_root)
-        if FIXTURES_EXCLUDED_PATH in relative_path.parents:
-            continue
-        relative_dir_parts = relative_path.parent.parts
-        if any(part in DEFAULT_EXCLUDED_DIR_NAMES for part in relative_dir_parts):
-            continue
-        if _matches_suspicious_pattern(path.stem):
-            matches.append(path)
+    for dirpath, dirnames, filenames in os.walk(repo_root):
+        current_dir = Path(dirpath)
+        dirnames[:] = [
+            name
+            for name in dirnames
+            if name not in DEFAULT_EXCLUDED_DIR_NAMES
+            and current_dir / name != dataset_dir
+            and (current_dir / name).relative_to(repo_root) != FIXTURES_EXCLUDED_PATH
+        ]
+        for filename in filenames:
+            if _matches_suspicious_pattern(Path(filename).stem):
+                matches.append(current_dir / filename)
     return sorted(matches, key=lambda path: str(path))
 
 
