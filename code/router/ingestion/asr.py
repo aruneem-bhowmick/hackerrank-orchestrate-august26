@@ -144,7 +144,10 @@ def _asr_result_from_response(response: object) -> ASRResult:
         segments = list(getattr(response, "segments", None) or [])
     except TypeError as exc:
         raise ASRClientError("Whisper verbose_json response has an invalid 'segments' value.") from exc
-    text = str(getattr(response, "text", "") or "").strip()
+    raw_text = getattr(response, "text", None)
+    if not isinstance(raw_text, str):
+        raise ASRClientError("Whisper verbose_json response has a non-string 'text' value.")
+    text = raw_text.strip()
 
     if not segments:
         return ASRResult(text="", confidence=0.0, failure=True, failure_reason=_NO_SEGMENTS_REASON)
