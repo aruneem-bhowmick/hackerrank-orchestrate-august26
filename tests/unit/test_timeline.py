@@ -97,6 +97,17 @@ def test_build_user_timelines_keeps_history_without_a_matching_event():
     assert entry["message_replied"] == ""
 
 
+def test_build_user_timelines_raises_on_duplicate_message_id():
+    """A message_id repeated in message_history raises before any join happens."""
+    history = [
+        _history_row("m1", "u_a", "2026-01-01 10:00"),
+        _history_row("m1", "u_a", "2026-01-02 10:00"),
+    ]
+    events = [_event_row("m1", "u_a")]
+    with pytest.raises(TimelineJoinError, match="m1"):
+        build_user_timelines(_bundle(history, events))
+
+
 def test_build_user_timelines_raises_on_orphaned_event():
     """An event with no matching historical message raises, naming the message_id."""
     history = [_history_row("m1", "u_a", "2026-01-01 10:00")]

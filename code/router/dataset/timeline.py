@@ -39,6 +39,8 @@ def build_user_timelines(bundle: DatasetBundle) -> UserTimeline:
     for the same message_id. A message_history row with no matching event
     is kept, with event fields defaulted to empty strings.
     """
+    _raise_on_duplicate_message_ids(bundle.message_history)
+
     merged = bundle.message_history.merge(
         bundle.message_events,
         on="message_id",
@@ -62,6 +64,19 @@ def build_user_timelines(bundle: DatasetBundle) -> UserTimeline:
         entries.sort(key=lambda entry: entry["created_at"])
 
     return timelines
+
+
+def _raise_on_duplicate_message_ids(message_history: pd.DataFrame) -> None:
+    """Raise TimelineJoinError if message_id is not unique in message_history.
+
+    A duplicate would otherwise fan out silently: the outer join on
+    message_id would attach the same message_events row to every
+    duplicate, fabricating identical reaction data for distinct messages.
+    """
+    duplicate_ids = message_history["message_id"][message_history["message_id"].duplicated()]
+    if not duplicate_ids.empty:
+        ids = ", ".join(sorted(duplicate_ids.unique()))
+        raise TimelineJoinError(f"message_history has duplicate message_id(s): {ids}")
 
 
 def _raise_on_orphaned_events(merged: pd.DataFrame) -> None:
