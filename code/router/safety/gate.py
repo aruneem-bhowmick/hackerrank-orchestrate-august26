@@ -162,6 +162,12 @@ def _lookup_business(business_id: str, business_accounts: pd.DataFrame) -> dict 
 
 
 def _verified_brand_names(business_accounts: pd.DataFrame) -> frozenset[str]:
-    """The lowercased set of brand_name values across every verified business row."""
+    """The lowercased set of non-blank brand_name values across every verified business row.
+
+    Blank names are excluded: two businesses that both happen to have an
+    empty brand_name are not "the same brand," and including "" in this
+    set would make any unverified business with a blank brand_name look
+    like it's impersonating a verified one.
+    """
     verified = business_accounts.loc[business_accounts["verified"] == "1", "brand_name"]
-    return frozenset(name.strip().lower() for name in verified)
+    return frozenset(name.strip().lower() for name in verified if name.strip())

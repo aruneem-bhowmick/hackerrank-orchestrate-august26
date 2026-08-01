@@ -88,6 +88,53 @@ def test_verified_business_with_same_brand_name_is_not_flagged():
     assert verdict.risk_type is None
 
 
+def test_blank_brand_name_does_not_falsely_trigger_impersonation():
+    """Two businesses that both happen to have a blank brand_name are not 'the same brand'."""
+    business_accounts = pd.DataFrame(
+        [
+            {
+                "business_id": "business_verified_blank",
+                "display_name": "",
+                "brand_name": "",
+                "category": "unknown",
+                "verified": "1",
+                "official_domain": "verified.example",
+                "domain_used_by_sender": "verified.example",
+                "account_age_days": "1000",
+                "messages_sent_30d": "10",
+                "user_reports_30d": "0",
+                "domain_used_by_sender_age_days": "1000",
+            },
+            {
+                "business_id": "business_unverified_blank",
+                "display_name": "",
+                "brand_name": "",
+                "category": "unknown",
+                "verified": "0",
+                "official_domain": "",
+                "domain_used_by_sender": "shady.example",
+                "account_age_days": "5",
+                "messages_sent_30d": "10",
+                "user_reports_30d": "0",
+                "domain_used_by_sender_age_days": "1000",
+            },
+        ],
+        columns=_BUSINESS_ACCOUNTS_COLUMNS,
+    )
+    verdict = score_message(
+        {
+            "message_id": "msg_blank_brand",
+            "business_id": "business_unverified_blank",
+            "message_text": "Hello there.",
+            "forwarded_count": "0",
+        },
+        business_accounts,
+        None,
+    )
+    assert "brand_impersonation" not in " ".join(verdict.risk_signals)
+    assert verdict.risk_signals == ("sender is an unverified business account",)
+
+
 def test_urgency_plus_payment_request_blocks():
     """Urgency combined with a credential/payment request reaches is_blocked=True."""
     verdict = score_message(
