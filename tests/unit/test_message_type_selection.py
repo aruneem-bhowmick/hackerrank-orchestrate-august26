@@ -4,6 +4,7 @@ import pytest
 from decision_signals import make_signals, make_verdict
 from message_type_samples import make_business, make_normalized_message
 
+from router.decision.content_signals import detect_content_urgency
 from router.decision.message_type import (
     ALLOWED_MESSAGE_TYPES,
     select_message_type,
@@ -17,7 +18,7 @@ def test_blocked_scam_selects_scam():
     verdict = make_verdict(is_blocked=True, risk_type="scam", risk_confidence=0.9)
     message = make_normalized_message(normalized_text="anything")
 
-    result = select_message_type(verdict, "mute", message, make_signals(), None, 0)
+    result = select_message_type(verdict, "mute", message, make_signals(), None, 0, False)
 
     assert result == "scam"
 
@@ -27,7 +28,7 @@ def test_blocked_spam_with_high_forwarded_count_selects_forward():
     verdict = make_verdict(is_blocked=True, risk_type="spam", risk_confidence=0.6)
     message = make_normalized_message(normalized_text="fwd as received, drink warm water")
 
-    result = select_message_type(verdict, "mute", message, make_signals(), None, 11)
+    result = select_message_type(verdict, "mute", message, make_signals(), None, 11, False)
 
     assert result == "forward"
 
@@ -37,7 +38,7 @@ def test_blocked_spam_with_low_forwarded_count_selects_spam():
     verdict = make_verdict(is_blocked=True, risk_type="spam", risk_confidence=0.6)
     message = make_normalized_message(normalized_text="huge sale today")
 
-    result = select_message_type(verdict, "mute", message, make_signals(), None, 1)
+    result = select_message_type(verdict, "mute", message, make_signals(), None, 1, False)
 
     assert result == "spam"
 
@@ -48,7 +49,7 @@ def test_personalization_mute_of_unverified_business_selects_spam():
     message = make_normalized_message(conversation_type="business", normalized_text="reminder")
     business = make_business(verified="0")
 
-    result = select_message_type(verdict, "mute", message, make_signals(), business, 0)
+    result = select_message_type(verdict, "mute", message, make_signals(), business, 0, False)
 
     assert result == "spam"
 
@@ -59,7 +60,7 @@ def test_personalization_mute_of_verified_business_selects_promotion():
     message = make_normalized_message(conversation_type="business", normalized_text="50% off")
     business = make_business(verified="1")
 
-    result = select_message_type(verdict, "mute", message, make_signals(), business, 3)
+    result = select_message_type(verdict, "mute", message, make_signals(), business, 3, False)
 
     assert result == "promotion"
 
@@ -75,13 +76,38 @@ def test_personalization_mute_of_verified_business_selects_promotion():
     ],
 )
 def test_content_classification_buckets(text: str, expected: str):
-    """Each content keyword bucket selects its matching message_type."""
+    """Each content keyword bucket selects its matching message_type.
+
+    content_urgency is derived from the same detector the production
+    pipeline uses, exercising the real threaded value rather than a
+    hardcoded stand-in.
+    """
     verdict = make_verdict()
     message = make_normalized_message(conversation_type="group", normalized_text=text)
 
-    result = select_message_type(verdict, "notify", message, make_signals(), None, 0)
+    result = select_message_type(verdict, "notify", message, make_signals(), None, 0, detect_content_urgency(text))
 
     assert result == expected
+
+
+def test_content_urgency_true_selects_urgent_even_without_urgent_keywords():
+    """content_urgency is trusted as given, not re-derived from text inside select_message_type."""
+    verdict = make_verdict()
+    message = make_normalized_message(conversation_type="group", normalized_text="Some ordinary update")
+
+    result = select_message_type(verdict, "notify", message, make_signals(), None, 0, True)
+
+    assert result == "urgent"
+
+
+def test_content_urgency_false_does_not_select_urgent_for_urgent_looking_text():
+    """select_message_type trusts the caller-supplied flag rather than re-scanning the text."""
+    verdict = make_verdict()
+    message = make_normalized_message(conversation_type="personal", normalized_text="This is urgent, please help")
+
+    result = select_message_type(verdict, "notify", message, make_signals(source_history_count=2), None, 0, False)
+
+    assert result == "personal"
 
 
 def test_image_caption_with_pickup_selects_promotion():
@@ -93,7 +119,7 @@ def test_image_caption_with_pickup_selects_promotion():
         media_type="image",
     )
 
-    result = select_message_type(verdict, "digest", message, make_signals(), None, 0)
+    result = select_message_type(verdict, "digest", message, make_signals(), None, 0, False)
 
     assert result == "promotion"
 
@@ -105,7 +131,7 @@ def test_text_only_pickup_mention_does_not_force_promotion():
         conversation_type="personal", normalized_text="checking if Sunday pickup still works for you"
     )
 
-    result = select_message_type(verdict, "notify", message, make_signals(source_history_count=5), None, 0)
+    result = select_message_type(verdict, "notify", message, make_signals(source_history_count=5), None, 0, False)
 
     assert result == "personal"
 
@@ -117,7 +143,9 @@ def test_direct_mention_with_request_alone_does_not_select_urgent():
         conversation_type="group", normalized_text="when you get 5 mins can you call? Nothing dramatic."
     )
 
-    result = select_message_type(verdict, "notify", message, make_signals(direct_mention=True, source_history_count=3), None, 0)
+    result = select_message_type(
+        verdict, "notify", message, make_signals(direct_mention=True, source_history_count=3), None, 0, False
+    )
 
     assert result == "personal"
 
@@ -127,7 +155,7 @@ def test_personal_conversation_with_no_history_selects_unknown():
     verdict = make_verdict()
     message = make_normalized_message(conversation_type="personal", normalized_text="Are you free Saturday?")
 
-    result = select_message_type(verdict, "digest", message, make_signals(source_history_count=0), None, 0)
+    result = select_message_type(verdict, "digest", message, make_signals(source_history_count=0), None, 0, False)
 
     assert result == "unknown"
 
@@ -137,7 +165,7 @@ def test_personal_conversation_with_history_selects_personal():
     verdict = make_verdict()
     message = make_normalized_message(conversation_type="personal", normalized_text="Reached home, talk tomorrow")
 
-    result = select_message_type(verdict, "digest", message, make_signals(source_history_count=5), None, 0)
+    result = select_message_type(verdict, "digest", message, make_signals(source_history_count=5), None, 0, False)
 
     assert result == "personal"
 
@@ -147,7 +175,7 @@ def test_business_conversation_default_selects_business_update():
     verdict = make_verdict()
     message = make_normalized_message(conversation_type="business", normalized_text="Thank you for choosing us, please give feedback")
 
-    result = select_message_type(verdict, "digest", message, make_signals(), make_business(), 0)
+    result = select_message_type(verdict, "digest", message, make_signals(), make_business(), 0, False)
 
     assert result == "business_update"
 
@@ -164,6 +192,6 @@ def test_selection_always_returns_an_allowed_value(conversation_type: str):
     verdict = make_verdict()
     message = make_normalized_message(conversation_type=conversation_type, normalized_text="hello there")
 
-    result = select_message_type(verdict, "digest", message, make_signals(), make_business(), 0)
+    result = select_message_type(verdict, "digest", message, make_signals(), make_business(), 0, False)
 
     assert result in ALLOWED_MESSAGE_TYPES
