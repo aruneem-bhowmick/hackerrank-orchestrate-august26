@@ -67,7 +67,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def _route_bundle(bundle: DatasetBundle, dataset_dir: Path):
-    """Run the complete P0-to-P4 router for one loaded bundle."""
+    """Run the complete upstream routing pipeline for one loaded bundle."""
     timelines = build_user_timelines(bundle)
     normalized = run_media_ingestion(bundle, dataset_dir)
     verdicts = run_safety_gate(bundle, normalized)
