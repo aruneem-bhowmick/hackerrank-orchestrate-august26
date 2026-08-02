@@ -21,6 +21,11 @@ def run_action_fusion(
 ) -> dict[str, FusionResult]:
     """Fuse every message's verdict and evidence bundle into one FusionResult each.
 
+    This compatibility helper is safety-only and urgency-blind: it has no
+    NormalizedMessage mapping, so it cannot compute content-based urgency and
+    leaves fuse_action's content_urgency argument at its False default. Use
+    run_decision_fusion for routes that must include normalized message text.
+
     Raises DecisionFusionError if verdicts and evidence do not share the
     exact same message_id key set, or if the produced count does not
     match — a missing entry here would otherwise surface only as a
