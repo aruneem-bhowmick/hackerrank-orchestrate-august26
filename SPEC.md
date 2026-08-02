@@ -658,13 +658,13 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   interprets message text as instructions, so this needed no special
   handling beyond the existing credential-request/urgency signals already
   present in those messages.
-- **Open (flagged 2026-08-01, see ADR-009)** — P3's `personalization_signals`
-  does not expose business-relationship *recency*
-  (`user_business_history.csv`'s `last_activity_at`), only an activity
-  count and a near-free-text relationship label. Decision fusion
-  calibration found two reference rows (`sample_msg_004`/`011`) that are
-  numerically indistinguishable in `value_score`/`urgency_score` yet need
-  opposite actions, and the distinguishing fact is relationship recency (14
-  days vs. 132 days old). Not fixed in this phase — fixing it means adding
-  a recency-based signal in P3, which is out of this phase's scope; flagged
-  here rather than patched around in P4 with a row-specific special case.
+- **Accepted release limitation (2026-08-01, see ADR-009)** — P3's
+  `personalization_signals` does not expose business-relationship *recency*
+  from `user_business_history.csv`'s `last_activity_at`; it has only an
+  activity count and a near-free-text relationship label. Consequently,
+  `sample_msg_004` and `sample_msg_011` remain numerically indistinguishable
+  in `value_score`/`urgency_score` despite requiring opposite reference
+  actions (14 days vs. 132 days since last activity). This is accepted for
+  the current release. A future personalization change may add a general
+  recency-based signal, such as days since `last_activity_at`, but decision
+  fusion must not add a row-specific exception.
