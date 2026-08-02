@@ -32,7 +32,7 @@ def _output(**overrides: object) -> pd.DataFrame:
 def test_validate_output_frame_accepts_complete_boundary_values():
     """REQ-P5-03 accepts both confidence endpoints and the `none` evidence sentinel."""
     first = _output(confidence=0.0, evidence_message_ids="none")
-    second = _output(confidence=1.0, evidence_message_ids="history_1,history_2")
+    second = _output(confidence=1.0, evidence_message_ids="history_1;history_2")
 
     validate_output_frame(_messages(), first)
     validate_output_frame(_messages(), second)
@@ -65,11 +65,12 @@ def test_validate_output_frame_rejects_blank_public_fields(field, value):
         ("confidence", math.inf, "outside"),
         ("confidence", -0.01, "outside"),
         ("confidence", 1.01, "outside"),
-        ("evidence_message_ids", "history_1,", "invalid evidence"),
-        ("evidence_message_ids", ",history_1", "invalid evidence"),
-        ("evidence_message_ids", "none,history_1", "invalid evidence"),
-        ("evidence_message_ids", "history_1,none", "invalid evidence"),
-        ("evidence_message_ids", "history_1,history_1", "invalid evidence"),
+        ("evidence_message_ids", "history_1;", "invalid evidence"),
+        ("evidence_message_ids", ";history_1", "invalid evidence"),
+        ("evidence_message_ids", "none;history_1", "invalid evidence"),
+        ("evidence_message_ids", "history_1;none", "invalid evidence"),
+        ("evidence_message_ids", "history_1;history_1", "invalid evidence"),
+        ("evidence_message_ids", "history_1,history_2", "invalid evidence"),
     ],
 )
 def test_validate_output_frame_rejects_invalid_field_values(field, value, match):

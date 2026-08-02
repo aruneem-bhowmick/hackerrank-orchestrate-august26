@@ -30,7 +30,7 @@ def test_full_decision_mapping_serializes_to_a_valid_submission(load_fixture_bun
     rows_by_id = frame.set_index("message_id")
     for message_id, decision in decisions.items():
         row = rows_by_id.loc[message_id]
-        expected_evidence = ",".join(decision.evidence_message_ids) or "none"
+        expected_evidence = ";".join(decision.evidence_message_ids) or "none"
         assert row["action"] == decision.action
         assert row["message_type"] == decision.message_type
         assert row["reason"] == decision.reason
