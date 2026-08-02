@@ -2,6 +2,7 @@
 
 import pandas as pd
 
+from router.dataset.identifiers import diff_id_sets
 from router.errors import RowCountParityError
 
 
@@ -20,11 +21,8 @@ def validate_row_count_parity(messages: pd.DataFrame, output: pd.DataFrame) -> N
             f"output.csv has {len(output)} row(s)."
         )
 
-    message_ids = set(messages["message_id"])
-    output_ids = set(output["message_id"])
-    if message_ids != output_ids:
-        missing_from_output = sorted(message_ids - output_ids)
-        missing_from_messages = sorted(output_ids - message_ids)
+    missing_from_output, missing_from_messages = diff_id_sets(messages["message_id"], output["message_id"])
+    if missing_from_output or missing_from_messages:
         raise RowCountParityError(
             "message_id sets disagree between messages.csv and output.csv: "
             f"missing from output.csv: {missing_from_output}; "
