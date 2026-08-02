@@ -96,6 +96,36 @@ def test_run_decision_fusion_produces_one_record_per_message():
         assert 0.0 <= record.confidence <= 1.0
 
 
+def test_reason_never_contradicts_a_notify_action_from_a_muted_group():
+    """A muted group that content urgency and engagement overrode into notify
+    must not have its reason claim the group's mute suppressed it — the
+    exact boundary case (priority == T_NOTIFY) surfaced in code review."""
+    messages = pd.DataFrame([{"message_id": "urgent_muted_group", "forwarded_count": "0"}])
+    bundle = _bundle(messages, pd.DataFrame(columns=["business_id", "verified", "brand_name"]))
+
+    normalized = {
+        "urgent_muted_group": _message(
+            "urgent_muted_group", conversation_type="group", text="Need this asap, please respond"
+        )
+    }
+    verdicts = {"urgent_muted_group": make_verdict(message_id="urgent_muted_group")}
+    signals = make_signals(
+        group_muted=True,
+        mention_override=False,
+        engagement_lift=0.5,
+        evidence_strength=0.25,
+        value_score_adjustment=0.75,
+        urgency_score_adjustment=-0.4,
+    )
+    evidence = {"urgent_muted_group": _evidence("urgent_muted_group", signals)}
+
+    records = run_decision_fusion(bundle, normalized, verdicts, evidence)
+    record = records["urgent_muted_group"]
+
+    assert record.action == "notify"
+    assert "muted" not in record.reason.lower()
+
+
 def test_run_decision_fusion_raises_on_mismatched_message_id_sets():
     """A normalized/verdict/evidence set that disagrees with bundle.messages raises loudly."""
     messages = pd.DataFrame([{"message_id": "msg_1", "forwarded_count": "0"}])
