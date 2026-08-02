@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 
+from router.dataset.identifiers import find_duplicates, find_mismatched_mapping_keys
 from router.dataset.loader import DatasetBundle
 from router.dataset.timeline import UserTimeline
 from router.errors import PersonalizationError
@@ -33,10 +34,12 @@ def run_personalization(normalized: Mapping[str, NormalizedMessage], bundle: Dat
 def _validate_identifier_parity(normalized: Mapping[str, NormalizedMessage]) -> None:
     """Reject duplicate internal ids and mapping keys that do not match them."""
     message_ids = [message.message_id for message in normalized.values()]
-    if len(set(message_ids)) != len(message_ids):
+    if find_duplicates(message_ids):
         raise PersonalizationError("normalized messages contain duplicate message_id values.")
-    for key, message in normalized.items():
-        if key != message.message_id:
-            raise PersonalizationError(
-                f"normalized mapping key '{key}' does not match message_id '{message.message_id}'."
-            )
+
+    inconsistent = find_mismatched_mapping_keys(normalized, id_of=lambda message: message.message_id)
+    if inconsistent:
+        key = inconsistent[0]
+        raise PersonalizationError(
+            f"normalized mapping key '{key}' does not match message_id '{normalized[key].message_id}'."
+        )

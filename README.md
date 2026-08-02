@@ -68,6 +68,68 @@ For image and voice-note messages, `images.csv` and `voice_notes.csv` only provi
 4. Write predictions to `output.csv`.
 5. Evaluate your approach on the solved sample rows before submitting.
 
+---
+
+## Run the Submission Pipeline
+
+Install the runtime dependencies, then run the complete batch pipeline from
+the repository root:
+
+```shell
+python -m pip install -r requirements.txt
+python code/main.py
+```
+
+This produces `dataset/output.csv`. The command validates every input table,
+routes every message, self-checks the solved examples, validates the finished
+CSV, and prints the output path and action summary. `output.csv` is written
+only after the complete submission validation succeeds.
+
+OCR and voice transcription are optional enhancements. To enable them, set
+their credentials in your shell environment before running the command; never
+place credentials in a source file or commit them:
+
+POSIX shells:
+
+```shell
+export ANTHROPIC_API_KEY="your-key"
+export OPENAI_API_KEY="your-key"
+python code/main.py
+```
+
+PowerShell:
+
+```powershell
+$env:ANTHROPIC_API_KEY = "your-key"
+$env:OPENAI_API_KEY = "your-key"
+python code/main.py
+```
+
+Without either key, the command still completes using the documented media
+fallback behavior. To run against another dataset directory or write elsewhere:
+
+```shell
+python code/main.py --dataset-dir path/to/dataset --output path/to/output.csv
+```
+
+### Calibration sanity check
+
+Before writing the production artifact, the pipeline routes
+`dataset/sample_messages.csv` through the same code path and reports separate
+agreement rates for `action` and `message_type`. The no-key baseline on the
+included 30 solved rows is **25/30 action agreement (83.3%)** and **28/30
+message-type agreement (93.3%)**. It was measured against the 30-row
+`dataset/sample_messages.csv` snapshot with SHA-256
+`C81C6960B65E945D35E8B0CE7C0C70334006AFFCF9C3EF166CF163E960BD1FEE`.
+This is a self-verification check, not a training input or a substitute for
+hidden-set evaluation; a run with live media credentials can differ for image
+or voice rows.
+
+Before submission, confirm that the command completed successfully and that
+`output.csv` has exactly the six required columns, one row for every input
+`message_id`, populated action/type/confidence values, and either `none` or
+valid historical ids in `evidence_message_ids`.
+
 You may use any language or runtime. Python, JavaScript, and TypeScript are all reasonable choices.
 
 ---

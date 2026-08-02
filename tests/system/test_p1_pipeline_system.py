@@ -21,10 +21,10 @@ def test_full_load_and_safety_gate_sequence_on_fixture_dataset(fixtures_dir):
     assert set(verdicts) == set(bundle.messages["message_id"])
 
 
-def test_cli_reports_a_safety_gate_summary_on_the_real_dataset(repo_root):
+def test_cli_reports_a_safety_gate_summary_on_the_real_dataset(repo_root, tmp_path):
     """Running the CLI against the real dataset prints the blocked/borderline/clean summary."""
     result = subprocess.run(
-        [sys.executable, str(repo_root / "code" / "main.py")],
+        [sys.executable, str(repo_root / "code" / "main.py"), "--output", str(tmp_path / "output.csv")],
         cwd=repo_root,
         capture_output=True,
         text=True,
