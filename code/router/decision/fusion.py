@@ -16,6 +16,7 @@ from router.decision.thresholds import (
     CONTENT_URGENCY_BOOST,
     T_DIGEST,
     T_NOTIFY,
+    bound01,
 )
 from router.decision.trace import FusionResult
 from router.safety.verdict import SafetyVerdict
@@ -41,17 +42,17 @@ def fuse_action(
     well-formed input; a missing key in signals is a programming error in
     the caller, not a data condition this function should mask.
     """
-    value_score = _bound01(BASE_SCORE + float(signals["value_score_adjustment"]))
+    value_score = bound01(BASE_SCORE + float(signals["value_score_adjustment"]))
     urgency_score = BASE_SCORE + float(signals["urgency_score_adjustment"])
     if content_urgency:
         urgency_score += CONTENT_URGENCY_BOOST
-    urgency_score = _bound01(urgency_score)
+    urgency_score = bound01(urgency_score)
 
     borderline = verdict.risk_type is not None and not verdict.is_blocked
     if borderline:
         penalty = BORDERLINE_RISK_PENALTY_WEIGHT * verdict.risk_confidence
-        value_score = _bound01(value_score - penalty)
-        urgency_score = _bound01(urgency_score - penalty)
+        value_score = bound01(value_score - penalty)
+        urgency_score = bound01(urgency_score - penalty)
 
     decision_basis = _build_decision_basis(verdict, signals, borderline, content_urgency)
 
@@ -113,8 +114,3 @@ def _build_decision_basis(
         basis.append("evidence_corroboration")
 
     return tuple(basis) if basis else ("no_signals",)
-
-
-def _bound01(value: float) -> float:
-    """Clamp a fused score to the documented [0, 1] range."""
-    return max(0.0, min(1.0, value))

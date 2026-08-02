@@ -13,6 +13,7 @@ from router.decision.thresholds import (
     CONFIDENCE_WEIGHT_AGREEMENT,
     CONFIDENCE_WEIGHT_EVIDENCE,
     CONFIDENCE_WEIGHT_SAFETY,
+    bound01,
 )
 from router.personalization.signals import MAX_EVIDENCE_STRENGTH
 from router.safety.verdict import SafetyVerdict
@@ -35,7 +36,7 @@ def compute_signal_agreement(verdict: SafetyVerdict, signals: Mapping[str, objec
     if verdict.risk_type is None:
         return 1.0
 
-    lean = _bound(
+    lean = bound01(
         (float(signals["value_score_adjustment"]) + float(signals["urgency_score_adjustment"])) / 2
     )
     if lean <= 0.0:
@@ -57,13 +58,13 @@ def compute_confidence(verdict: SafetyVerdict, signals: Mapping[str, object], si
     independently nameable and testable (see _safety_certainty and
     compute_signal_agreement).
     """
-    evidence_ratio = _bound(float(signals["evidence_strength"]) / MAX_EVIDENCE_STRENGTH)
+    evidence_ratio = bound01(float(signals["evidence_strength"]) / MAX_EVIDENCE_STRENGTH)
     confidence = (
         CONFIDENCE_WEIGHT_SAFETY * _safety_certainty(verdict)
         + CONFIDENCE_WEIGHT_EVIDENCE * evidence_ratio
         + CONFIDENCE_WEIGHT_AGREEMENT * signal_agreement
     )
-    return round(_bound(confidence), _ROUND_DECIMAL_PLACES)
+    return round(bound01(confidence), _ROUND_DECIMAL_PLACES)
 
 
 def _safety_certainty(verdict: SafetyVerdict) -> float:
@@ -79,8 +80,3 @@ def _safety_certainty(verdict: SafetyVerdict) -> float:
     if verdict.is_blocked:
         return verdict.risk_confidence
     return 1.0 - verdict.risk_confidence
-
-
-def _bound(value: float) -> float:
-    """Clamp a formula component to the documented [0, 1] range."""
-    return max(0.0, min(1.0, value))

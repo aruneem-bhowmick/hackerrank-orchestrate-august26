@@ -47,3 +47,14 @@ formula. Resolved in SPEC.md ADR-004."""
 CONFIDENCE_WEIGHT_AGREEMENT: float = 0.3
 """Weight of safety/personalization signal agreement in the confidence
 formula. Resolved in SPEC.md ADR-004."""
+
+
+def bound01(value: float) -> float:
+    """Clamp a score or formula component to the documented [0, 1] range.
+
+    Shared by fusion.py (value_score/urgency_score) and confidence.py
+    (evidence_ratio/confidence) so the two modules clamp to the same
+    range with one implementation, not two independently-maintained
+    copies of the same two-line expression.
+    """
+    return max(0.0, min(1.0, value))
