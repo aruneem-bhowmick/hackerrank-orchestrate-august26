@@ -112,13 +112,10 @@ from — never a free-text blob assembled ad hoc at reason-generation time.
   (mirroring REQ-P3-03's causal-evidence rule, extended here to safety
   context) rather than being silently dropped once it fails to block
   (REQ-P1-06).
-- **ADR-004 (pending in SPEC.md as of this writing)**: confidence formula
-  weights. This phase resolves it. Every prompt below states its exact
-  formula/weights as a documented assumption; once REQ-P4-02 is implemented
-  and calibrated against `dataset/sample_messages.csv`, update `SPEC.md`
-  ADR-004 from `(pending)` to a dated, resolved entry recording the final
-  weights and the calibration evidence for them — do not leave the prompt's
-  assumption and the SPEC.md ADR log out of sync.
+- **ADR-004 (resolved in SPEC.md)**: confidence formula weights. The final
+  0.5/0.2/0.3 weights and their calibration evidence are recorded there. ADR-009
+  records the separate action-threshold, borderline-risk, and content-urgency
+  calibration. Keep both records aligned with the runtime constants.
 - **Documented assumption (no LLM in fusion)**: consistent with REQ-P4-01's
   "not a single opaque LLM call" language and this project's existing
   rule-based ethos (ADR-006), decision fusion, confidence, message_type

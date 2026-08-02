@@ -26,17 +26,16 @@ half of the final routing decision.
   by `message_id`, exactly as wired in `code/main.py` today.
 - `EvidenceBundle.personalization_signals["value_score_adjustment"]` and
   `["urgency_score_adjustment"]` are each bounded to `[-1, 1]`
-  (`router.personalization.signals.apply_score_adjustments`). This prompt
-  treats them as the "personalization score" and "urgency signals" inputs
-  REQ-P4-01's text names — no separate content-based urgency detector is
-  introduced here; `_PREAMBLE.md`'s "no LLM in fusion" assumption already
-  covers why no additional signal source is added.
-- Action thresholds (`T_NOTIFY`, `T_DIGEST`) and the borderline-risk penalty
-  weight are documented assumptions per `_PREAMBLE.md`'s ADR-004 note; they
-  will be calibrated against `dataset/sample_messages.csv` once this and the
-  following three prompts are all implemented, and `SPEC.md` ADR-004 updated
-  accordingly. Do not hand-tune per-message special cases here — only the
-  named constants below.
+  (`router.personalization.signals.apply_score_adjustments`). They describe
+  receiver context only. `router.decision.content_signals.detect_content_urgency`
+  separately detects deadline or escalation language from `NormalizedMessage`
+  text and passes its boolean result to `fuse_action` as `content_urgency`.
+- ADR-009 records the completed calibration: `T_NOTIFY = 0.70`,
+  `T_DIGEST = 0.35`, `BORDERLINE_RISK_PENALTY_WEIGHT = 0.5`, and
+  `CONTENT_URGENCY_BOOST = 0.3`. The boost is additive to context-only
+  urgency, so routine messages from an engaged sender do not become notify
+  candidates without message-content urgency. Do not add per-message special
+  cases; use the named constants.
 
 ## Files to create or modify
 - `code/router/decision/__init__.py` — new empty package marker.
@@ -44,8 +43,10 @@ half of the final routing decision.
   dataclasses (the latter's other fields are populated by later prompts;
   define its full shape now so downstream prompts do not redefine it).
 - `code/router/decision/thresholds.py` — new: `BASE_SCORE`, `T_NOTIFY`,
-  `T_DIGEST`, `BORDERLINE_RISK_PENALTY_WEIGHT` documented constants.
-- `code/router/decision/fusion.py` — new: `fuse_action`.
+  `T_DIGEST`, `BORDERLINE_RISK_PENALTY_WEIGHT`, and
+  `CONTENT_URGENCY_BOOST` documented constants.
+- `code/router/decision/content_signals.py` — new: content-urgency detector.
+- `code/router/decision/fusion.py` — new: `fuse_action` with content urgency.
 - `code/router/decision/pipeline.py` — new: `run_action_fusion` (batch
   entrypoint over this prompt's scope only; extended by REQ-P4-04 into the
   full Decision Record batch runner).
@@ -54,6 +55,7 @@ half of the final routing decision.
   `SafetyVerdict`/`personalization_signals` fixtures reused by every prompt
   in this phase.
 - `tests/unit/test_action_fusion.py` — new.
+- `tests/unit/test_content_urgency.py` — new.
 - `tests/unit/test_decision_trace_contract.py` — new.
 - `tests/integration/test_safety_override_fusion_regression.py` — new.
 - `tests/system/test_p4_pipeline_system.py` — new (extended by later
@@ -130,15 +132,19 @@ from router.safety.verdict import SafetyVerdict
 
 
 def fuse_action(
-    message_id: str, verdict: SafetyVerdict, signals: Mapping[str, object]
+    message_id: str,
+    verdict: SafetyVerdict,
+    signals: Mapping[str, object],
+    content_urgency: bool = False,
 ) -> FusionResult:
     """Deterministically fuse a safety verdict and personalization signals
     into one FusionResult.
 
     signals is one EvidenceBundle's personalization_signals mapping (see
-    _PREAMBLE.md). Raises nothing for well-formed input; a missing key in
-    signals is a programming error in the caller, not a data condition this
-    function should mask.
+    _PREAMBLE.md). content_urgency is computed from normalized message text,
+    not from receiver context. Raises nothing for well-formed input; a missing
+    key in signals is a programming error in the caller, not a data condition
+    this function should mask.
     """
 ```
 
@@ -166,29 +172,32 @@ def run_action_fusion(
 1. `FusionResult`/`DecisionRecord` in `trace.py` mirror the dataclass style
    used by `SafetyVerdict`/`EvidenceBundle`: `frozen=True`, tuple fields
    normalized in `__post_init__`.
-2. `thresholds.py` constants, each with a doc comment stating it is a
-   documented pre-calibration assumption per `_PREAMBLE.md`:
+2. `thresholds.py` constants, calibrated as recorded in `SPEC.md` ADR-009:
    - `BASE_SCORE: float = 0.5` — the neutral starting point before any
-     personalization adjustment is applied.
-   - `T_NOTIFY: float = 0.62` — fused priority score at/above which
-     `action` is `"notify"`.
+      personalization adjustment is applied.
+   - `T_NOTIFY: float = 0.70` — fused priority score at/above which
+      `action` is `"notify"`.
    - `T_DIGEST: float = 0.35` — fused priority score at/above which
      `action` is `"digest"` (below this, `"mute"`).
    - `BORDERLINE_RISK_PENALTY_WEIGHT: float = 0.5` — multiplies
      `risk_confidence` to compute the penalty applied to both
-     `value_score` and `urgency_score` when the verdict is borderline
-     (`risk_type` set, `is_blocked=False`).
+      `value_score` and `urgency_score` when the verdict is borderline
+      (`risk_type` set, `is_blocked=False`).
+   - `CONTENT_URGENCY_BOOST: float = 0.3` — added to `urgency_score` when
+     `content_urgency` is true.
 3. `fuse_action` steps, in order:
    a. `value_score = clamp(BASE_SCORE + signals["value_score_adjustment"], 0, 1)`.
    b. `urgency_score = clamp(BASE_SCORE + signals["urgency_score_adjustment"], 0, 1)`.
-   c. If `verdict.risk_type is not None and not verdict.is_blocked` (the
+   c. If `content_urgency`, add `CONTENT_URGENCY_BOOST` to `urgency_score` and
+      clamp it to `[0, 1]`.
+   d. If `verdict.risk_type is not None and not verdict.is_blocked` (the
       REQ-P1-06 borderline case): compute
       `penalty = BORDERLINE_RISK_PENALTY_WEIGHT * verdict.risk_confidence`
       and subtract it from both scores (clamp again after). This is what
       makes a borderline risk signal "visibly lower the value/urgency
       score, not just appear decoratively" — the same causal principle
       REQ-P3-03 states for evidence, applied here to safety context.
-   d. Build `decision_basis` from named, non-zero/true fields already
+   e. Build `decision_basis` from named, non-zero/true fields already
       present on `signals` and `verdict` (do not re-derive new heuristics
       here): `"safety_block:scam"`/`"safety_block:spam"` when
       `verdict.is_blocked`; `"borderline_safety_risk:scam"`/`"...spam"` when
@@ -202,15 +211,15 @@ def run_action_fusion(
       If none of these apply, `decision_basis = ("no_signals",)` — never an
       empty tuple (an empty tuple would be indistinguishable from "not yet
       computed" when logged).
-   e. If `verdict.is_blocked`: `action = "mute"` unconditionally — this is
+   f. If `verdict.is_blocked`: `action = "mute"` unconditionally — this is
       the REQ-P1-04 hard override. `value_score`/`urgency_score` are still
       computed and returned (for logging/eval — REQ-P4-01 requires
       intermediate scores to be loggable even when they did not decide the
       action), never used to pick a different action.
-   f. Else: `priority = 0.5 * value_score + 0.5 * urgency_score`; `action =
+   g. Else: `priority = 0.5 * value_score + 0.5 * urgency_score`; `action =
       "notify"` if `priority >= T_NOTIFY`, else `"digest"` if `priority >=
       T_DIGEST`, else `"mute"`.
-   g. Return `FusionResult(message_id, action, value_score, urgency_score,
+   h. Return `FusionResult(message_id, action, value_score, urgency_score,
       verdict.risk_confidence, decision_basis)`.
 4. `run_action_fusion` validates `set(verdicts) == set(evidence)` before
    fusing (raise `DecisionFusionError` naming any mismatched ids), calls
@@ -240,7 +249,12 @@ def run_action_fusion(
   decision_basis=("no_signals",); muted_group + mention_override present
   together yields "muted_group_mention_override" in decision_basis, not
   "group_muted_suppressed"; each threshold boundary (`T_NOTIFY`, `T_DIGEST`)
-  exactly at, just above, and just below. Target: `tests/unit/test_action_fusion.py`.
+  exactly at, just above, and just below; content urgency raises only
+  `urgency_score` by `CONTENT_URGENCY_BOOST`. Target:
+  `tests/unit/test_action_fusion.py`.
+- **Unit:** `detect_content_urgency` recognizes deadline/escalation language
+  and ignores an explicit "nothing urgent" disclaimer. Target:
+  `tests/unit/test_content_urgency.py`.
 - **Unit:** `FusionResult`/`DecisionRecord` tuple normalization — construct
   with a list for `decision_basis`/`evidence_message_ids` and assert the
   stored value is a tuple. Target: `tests/unit/test_decision_trace_contract.py`.
@@ -312,7 +326,6 @@ from the unit tests above.
   intermediate `FusionResult`.
 - Wiring `code/main.py` — deferred to REQ-P4-04, once the full Decision
   Record can be assembled end to end.
-- Calibrating `T_NOTIFY`/`T_DIGEST`/`BORDERLINE_RISK_PENALTY_WEIGHT` against
-  `dataset/sample_messages.csv` — noted as a documented assumption here;
-  actual calibration happens once all four prompts in this phase are
-  implemented, per `_PREAMBLE.md`'s ADR-004 instruction.
+- Replacing the calibrated `T_NOTIFY`/`T_DIGEST`/
+  `BORDERLINE_RISK_PENALTY_WEIGHT`/`CONTENT_URGENCY_BOOST` values with
+  per-message exceptions. ADR-009 records the data-backed calibration.
