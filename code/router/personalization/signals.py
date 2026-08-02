@@ -13,6 +13,13 @@ _MENTION_TEMPLATE = r"(?<![a-z0-9_])@{user_id}(?![a-z0-9_])"
 _MAX_ADJUSTMENT = 1.0
 _MUTED_GROUP_URGENCY_PENALTY = -0.4
 
+MAX_EVIDENCE_STRENGTH: float = 0.25
+"""The upper bound apply_score_adjustments clamps evidence_strength to.
+
+Named so decision fusion's confidence formula (REQ-P4-02) can normalize
+evidence_strength to [0, 1] without duplicating this bound as a second
+magic number."""
+
 
 def build_personalization_signals(message: NormalizedMessage, bundle: DatasetBundle, timeline: Sequence[Mapping[str, object]]) -> dict[str, object]:
     """Return loaded receiver context plus neutral initial score adjustments."""
@@ -74,7 +81,7 @@ def apply_score_adjustments(signals: dict[str, object], evidence_count: int, mea
     """Attach bounded value and urgency adjustments with named causal components."""
     dismissal_penalty = -0.45 * float(signals["dismiss_rate"]) if evidence_count else 0.0
     engagement_lift = 0.25 * float(signals["open_rate"]) + 0.25 * float(signals["reply_rate"]) if evidence_count else 0.0
-    evidence_strength = min(0.25, evidence_count * mean_relevance * 0.12)
+    evidence_strength = min(MAX_EVIDENCE_STRENGTH, evidence_count * mean_relevance * 0.12)
     quiet_hours_penalty = -0.25 if signals["quiet_hours"] else 0.0
     group_muted_penalty = _MUTED_GROUP_URGENCY_PENALTY if signals["group_muted"] else 0.0
     mention_lift = 0.6 if signals["group_muted"] and signals["direct_mention"] else 0.0

@@ -115,7 +115,32 @@ requires a JSON-style array must explicitly use `list(verdict.risk_signals)`.
   retrieval_method: str, personalization_signals: {...} }
 ```
 
-### 1.5 Output (`output.csv`)
+### 1.5 Internal — Decision Record (output of P4)
+```
+{
+  message_id, action, message_type, reason, confidence,
+  evidence_message_ids: tuple[str, ...],
+  safety_confidence: float, value_score: float, urgency_score: float,
+  signal_agreement: float, decision_basis: tuple[str, ...],
+}
+```
+
+`action`, `message_type`, `reason`, `confidence`, and `evidence_message_ids` are exactly
+the fields P5 serializes into `output.csv` (§1.6) for this `message_id` — P4 is the last
+phase to set their values; P5 only validates and writes them, it does not recompute them.
+
+The remaining fields are the "loggable intermediate state" REQ-P4-01 requires and are
+never written to `output.csv`: `safety_confidence` is the safety gate's own
+`risk_confidence` (0.0 when `risk_type` is `None`); `value_score`/`urgency_score` are P4's
+fused [0, 1] scores after applying P3's `value_score_adjustment`/`urgency_score_adjustment`
+and any borderline-risk penalty (REQ-P1-06); `signal_agreement` is the [0, 1] measure of
+whether the safety verdict and the personalization signals point the same direction
+(REQ-P4-02); `decision_basis` is an immutable tuple of short, named component identifiers
+(e.g. `"safety_block:scam"`, `"group_muted_no_mention_override"`,
+`"evidence_dismissal_penalty"`) that REQ-P4-04's `reason` string is built from — never a
+free-text blob assembled ad hoc at reason-generation time.
+
+### 1.6 Output (`output.csv`)
 Exact columns/order per `problem_statement.md` §Required output:
 `message_id, action, message_type, reason, confidence, evidence_message_ids`
 
@@ -259,6 +284,10 @@ test category doesn't apply rather than omitting silently.
 | REQ-P2-05 | Unit | Same media_id referenced by two messages → underlying OCR/ASR client invoked exactly once |
 | REQ-P3-04 | Unit | New sender, no history → evidence_message_ids == "none" |
 | REQ-P3-06 | Integration | Muted group + explicit @mention → action escalates |
+| REQ-P4-01 | Regression | Blocked verdict + maximally favorable personalization → action stays "mute" |
+| REQ-P4-02 | Unit | Confidence moves independently with each of safety certainty, evidence strength, and signal agreement |
+| REQ-P4-03 | Unit | Every branch's output is a member of the fixed message_type allowed-value list |
+| REQ-P4-04 | Unit | reason names a concrete signal, not a templated restatement of action |
 | REQ-P5-01 | Integration | Row-count parity check, run as final CI-style gate |
 | (voice-specific tests) | N/A for text-only messages | Justify explicitly rather than skipping silently |
 
@@ -283,8 +312,39 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   is fit only against the receiving user's own timeline for each retrieval,
   tokenizes deterministically, and combines its similarity with an explicit
   same-sender/business/group match; identity alone can never select evidence.
-- **ADR-004** (pending): Confidence formula weights — to be tuned against
-  `sample_messages.csv` behavior.
+- **ADR-004** (2026-08-01): Confidence formula weights, resolved.
+  `confidence = 0.5 * safety_certainty + 0.2 * evidence_ratio + 0.3 * signal_agreement`
+  (`router/decision/thresholds.py`'s `CONFIDENCE_WEIGHT_SAFETY`/
+  `CONFIDENCE_WEIGHT_EVIDENCE`/`CONFIDENCE_WEIGHT_AGREEMENT`). `safety_certainty`
+  is `risk_confidence` itself when blocked, `1 - risk_confidence` when
+  borderline, and `1.0` when clean (`router/decision/confidence.py`'s
+  `_safety_certainty`) — a barely-over-threshold block is less certain than
+  one built from several corroborating signals well above it, and a
+  borderline verdict is least certain the closer it sits to the blocking
+  threshold. `evidence_ratio` normalizes P3's `evidence_strength` by its own
+  documented bound (`MAX_EVIDENCE_STRENGTH = 0.25`, named in
+  `router/personalization/signals.py` for this reuse). `signal_agreement`
+  resolves REQ-P4-02's "agreement between independent signals" parenthetical
+  as agreement between the safety gate's independent, receiver-agnostic
+  verdict and P3's independent, receiver-scoped personalization signals —
+  the two coupled decisions `SPEC.md` §0 already frames as this system's
+  real architecture; no LLM/model-judgment call was introduced to manufacture
+  a second literal signal for this stage (see ADR-006's rule-based
+  precedent). Alternatives considered: (a) letting a raw safety
+  `risk_confidence` or a raw personalization score stand in for confidence
+  directly — rejected, this is exactly the "raw, ungrounded number" REQ-P4-02
+  forbids as the sole source; (b) weighting evidence strength more heavily
+  than safety certainty — rejected, most messages in this dataset carry no
+  retrievable evidence at all (`evidence_message_ids = none` is common), so
+  an evidence-dominant formula would make confidence uninformative for the
+  majority of rows. Calibrated against `dataset/sample_messages.csv`
+  (30 rows): mean absolute difference between computed and reference
+  confidence is 0.092, with computed values clustering in the same
+  0.6-1.0 band the reference data occupies (reference mean 0.84, range
+  0.78-0.91) rather than drifting to an implausible extreme. No further
+  reweighting was done on the strength of this check — see ADR-009 for the
+  full calibration write-up shared with the action-fusion and message_type
+  work this same pass covered.
 - **ADR-005** (2026-08-01): P0's output contract is a `DatasetBundle` of
   in-memory DataFrames (one per input file) plus a `UserTimeline` dict keyed
   by `user_id`, joining `message_history.csv` + `message_events.csv` on
@@ -463,6 +523,136 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   ensuring readable media content receives the same risk screening as native
   text.
 
+- **ADR-009** (2026-08-01): Decision fusion, confidence, and message_type
+  selection are implemented as deterministic functions over P1/P2/P3's
+  already-computed signals — no LLM call (see the corresponding assumption
+  already stated for this stage, consistent with ADR-006's rule-based
+  precedent). Three points resolved once calibrated against
+  `dataset/sample_messages.csv`:
+
+  **Action fusion needs message-content urgency as a real, separate input.**
+  P3's `urgency_score_adjustment` reflects notification *context* only
+  (quiet hours, group mute, mention override) — for an ordinary message with
+  none of those, it never moves off its neutral baseline. The first
+  calibration pass (thresholds `T_NOTIFY=0.62`/`T_DIGEST=0.35`, no content
+  signal) scored 20/30 (66.7%) action agreement and 21/30 (70.0%)
+  message_type agreement, and every action miss was the same shape: a
+  message from a sender/group/business the receiver engages with often
+  pushed `value_score` to its ceiling, and `0.5*value_score + 0.5*urgency_score`
+  crossed `T_NOTIFY` on engagement alone, with no genuine time-sensitivity in
+  the message itself (`sample_msg_007` through `sample_msg_012`, all
+  reference `digest`). Adding `router/decision/content_signals.py`'s
+  `detect_content_urgency` (explicit deadline/escalation language, e.g.
+  "before EOD", "within 2 hours", "escalation starts asap", with a negation
+  guard so "nothing urgent" is not misread as urgent) as a genuine third
+  fusion input — folded into `urgency_score` via
+  `CONTENT_URGENCY_BOOST = 0.3`, independent of and additive with P3's
+  context-only adjustment — combined with raising `T_NOTIFY` to `0.70`,
+  moved action agreement to 25/30 (83.3%) without breaking any
+  previously-correct row.
+
+  **Message_type content classification, calibrated.** Three keyword
+  collisions were found and fixed by inspection of the actual mismatches:
+  (1) `"no need to (?:respond|reply)"` matched an ordinary, non-greeting
+  group logistics notice (`sample_msg_008`) as well as a genuine greeting/
+  blessing forward — dropped, kept only the explicit blessing/well-wish
+  phrases; (2) a bare `"pickup"` collided between a casual personal carpool
+  chat (`sample_msg_006`, text-only) and an item-for-sale collection
+  arrangement (`sample_msg_044`/`045`/`047`, all image captions) — resolved
+  structurally by restricting the promotion-via-pickup signal to
+  `media_type == "image"` rather than trying to disambiguate by keyword
+  alone; (3) `"delivery-code"` wrongly classified an Amazon order-tracking
+  notice (`sample_msg_004`, reference `business_update`) as `event` —
+  dropped from the event pattern. A fourth change was behavioral, not a
+  keyword fix: a direct `@mention` combined with a plain request for a
+  response (`sample_msg_006`, "when you get 5 mins can you call?") was
+  initially classified `urgent`, but the reference labels this `personal`
+  even though it resolves to `notify` — `message_type` and `action` are
+  independent outputs, and a personal direct ask is still content-type
+  `personal`; the mention+request branch was removed from the `urgent`
+  classifier entirely (content urgency alone now decides `urgent`). Final
+  message_type agreement: 28/30 (93.3%) — matching ADR-006's own
+  calibration precedent for what this project treats as an adequately
+  tuned, non-overfit classifier.
+
+  **Two remaining action mismatches are structural, not tuning gaps, and
+  three are sandbox artifacts of this pass, not fusion logic errors.**
+  `sample_msg_011` (reference `digest`) and `sample_msg_004` (reference
+  `notify`) fuse to numerically **identical** `value_score`/`urgency_score`
+  (`1.0`/`0.5`) — both are business messages the receiver engages with
+  well, with no content urgency in either. No threshold or reweighting on
+  these two numbers alone can separate them, because the distinguishing
+  fact is not present in either number: `user_business_history.csv`'s
+  `last_activity_at` is 14 days before the message for `business_001`
+  (`sample_msg_004`) and 132 days before it for `business_096`
+  (`sample_msg_011`), but P3's `personalization_signals` does not expose
+  relationship recency at all today, only `business_activity_count` and
+  `business_relationship` (the `why_user_knows_account` label, itself a
+  ~90-value near-free-text field unsuitable for a small, general keyword
+  rule). Fixing this properly means P3 exposing a recency-based signal
+  (e.g. days since `last_activity_at`) for P4 to fold into
+  `value_score_adjustment` or a new named component — flagged here as a
+  follow-up for P3, deliberately not patched into P4 with a one-off special
+  case for these two rows, which would overfit this exact calibration set
+  rather than generalize. `sample_msg_044`/`050` are the same shape
+  (engagement-driven `value_score` ceiling with no content urgency,
+  reference `digest`). `sample_msg_042` (voice) and part of `sample_msg_043`
+  (voice) are ASR-dependent: this calibration pass ran with no
+  `OPENAI_API_KEY` present, so both land in the REQ-P2-04 fallback path
+  with no transcript to classify or score — expected per ADR-007, not a
+  fusion defect; a keyed run should be spot-checked once real transcripts
+  are available. The rest of `sample_msg_043`'s mismatch (reference `mute`/
+  `spam`, computed `digest`/`business_update`) is the same P1/P3-scope gap
+  ADR-006 already documented for this exact row: `business_098`'s
+  unverified/generic identity produces only a borderline scam signal
+  (`0.3`, from business-identity heuristics alone, text being empty), and
+  this receiver's timeline yields no matching evidence for this business
+  (`evidence_message_ids = none`), so personalization has no dismissal
+  signal to contribute either — the same "P1 cannot see it, P3/P4 has
+  nothing to retrieve" gap, now confirmed present even with P4 built.
+
+  No further reweighting was done past this point — see the "structural,
+  not tuning" note above for why continuing to chase these five rows would
+  overfit rather than generalize to the real 110-row `dataset/messages.csv`.
+
+  Review pass (2026-08-02): a precision-focused code review of the PR
+  surfaced seven issues, all fixed and re-verified against the full test
+  suite. Two were correctness bugs in `reason.py`'s `build_reason`: every
+  basis component `fuse_action` names in `decision_basis` reflects a
+  signal that *contributed to* `value_score`/`urgency_score`, not one that
+  *won* — `sender_dismissal_history`, `group_muted_suppressed`, and
+  `quiet_hours_suppressed` were selected unconditionally, so a muted group
+  or dismissal history that content urgency and engagement outweighed
+  could still be reported as the reason a message was muted, on a row
+  whose `action` was actually `notify` (exact repro: `group_muted=True`,
+  `mention_override=False`, `engagement_lift=0.5`,
+  `evidence_strength=MAX_EVIDENCE_STRENGTH`, `content_urgency=True`, clean
+  verdict → `priority == T_NOTIFY` exactly → `action="notify"`, yet
+  `decision_basis` still contained `group_muted_suppressed`). Separately,
+  `decision_basis == ("content_urgency_signal",)` — a state
+  `test_content_urgency_alone_can_be_the_only_basis_component` already
+  proved reachable — matched no branch at all and fell through to the
+  generic "no urgency found" fallback. Fixed by gating every suppressive
+  branch on `action != "notify"` and every elevating branch (including the
+  new `content_urgency_signal` branch) on `action != "mute"`, so a
+  component whose own direction contradicts the actual action is never
+  narrated as its cause.
+
+  The remaining five issues were efficiency/duplication, not correctness:
+  `detect_content_urgency` and `compute_signal_agreement` were each
+  computed twice per message (once for `fuse_action`/`DecisionRecord`
+  directly, again inside `select_message_type`/`compute_confidence`) —
+  fixed by threading the already-computed value through as a parameter
+  instead of re-deriving it. `run_action_fusion`, an earlier-stage
+  scaffold from before `run_decision_fusion` existed, had no production
+  caller, silently omitted the content-urgency signal per its own
+  docstring, and sat in the same module as the complete entrypoint under
+  the same `run_*` naming convention — removed, with its regression
+  coverage migrated onto `fuse_action` directly. `fusion.py` and
+  `confidence.py` each defined an identical private `[0, 1]` clamp —
+  unified into one `bound01` in `thresholds.py`, which both already
+  imported from.
+
 ---
 
 ## 6. Open Questions (resolve once Claude Code has inspected the actual dataset)
@@ -506,3 +696,13 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   interprets message text as instructions, so this needed no special
   handling beyond the existing credential-request/urgency signals already
   present in those messages.
+- **Accepted release limitation (2026-08-01, see ADR-009)** — P3's
+  `personalization_signals` does not expose business-relationship *recency*
+  from `user_business_history.csv`'s `last_activity_at`; it has only an
+  activity count and a near-free-text relationship label. Consequently,
+  `sample_msg_004` and `sample_msg_011` remain numerically indistinguishable
+  in `value_score`/`urgency_score` despite requiring opposite reference
+  actions (14 days vs. 132 days since last activity). This is accepted for
+  the current release. A future personalization change may add a general
+  recency-based signal, such as days since `last_activity_at`, but decision
+  fusion must not add a row-specific exception.
