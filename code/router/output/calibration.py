@@ -1,4 +1,8 @@
-"""Self-validation metrics for the solved sample-message reference set."""
+"""Self-validation metrics for the solved sample-message reference set.
+
+Per REQ-P5-02, this routes the solved sample through the production path
+and reports action/message_type agreement as a calibration sanity check.
+"""
 
 from dataclasses import dataclass, replace
 from collections.abc import Mapping

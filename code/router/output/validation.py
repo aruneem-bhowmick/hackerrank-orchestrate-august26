@@ -1,4 +1,8 @@
-"""Validation gates for the final six-column submission artifact."""
+"""Validation gates for the final six-column submission artifact.
+
+Per REQ-P5-03, this is the gate that rejects blank, invalid, or malformed
+action/message_type/reason/confidence/evidence values before disk write.
+"""
 
 import math
 

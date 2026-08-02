@@ -1,4 +1,8 @@
-"""Deterministic conversion of decision records into the submission CSV."""
+"""Deterministic conversion of decision records into the submission CSV.
+
+Per REQ-P5-01, this is the only place that serializes one ordered row per
+message and turns an empty evidence tuple into the `none` sentinel.
+"""
 
 from collections.abc import Mapping, Sequence
 from pathlib import Path
