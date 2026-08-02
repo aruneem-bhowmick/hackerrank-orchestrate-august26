@@ -24,6 +24,9 @@ OUTPUT_COLUMNS = (
 )
 """The exact, ordered columns required by the submission contract."""
 
+EVIDENCE_DELIMITER = ";"
+"""The separator required between multiple historical evidence identifiers."""
+
 
 def build_output_frame(
     message_ids: Sequence[str], decisions: Mapping[str, DecisionRecord]
@@ -31,7 +34,7 @@ def build_output_frame(
     """Return one ordered submission row per message id without writing I/O.
 
     Empty evidence ids are serialized as the required ``none`` sentinel and
-    populated evidence ids use a deterministic comma-separated representation.
+    populated evidence ids use a deterministic semicolon-separated representation.
     Raises OutputValidationError when source identifiers and decision records
     cannot form a one-to-one mapping. Semantic field validation is performed
     separately by ``validate_output_frame``.
@@ -90,7 +93,7 @@ def _validate_decision_identifiers(
 
 def _serialize_record(message_id: str, record: DecisionRecord) -> dict[str, object]:
     """Select the six public fields from one DecisionRecord for CSV serialization."""
-    evidence = ",".join(record.evidence_message_ids) if record.evidence_message_ids else "none"
+    evidence = EVIDENCE_DELIMITER.join(record.evidence_message_ids) if record.evidence_message_ids else "none"
     return {
         "message_id": message_id,
         "action": record.action,

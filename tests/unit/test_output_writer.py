@@ -33,7 +33,7 @@ def test_build_output_frame_preserves_source_order_and_evidence_sentinel():
 
     assert tuple(frame.columns) == OUTPUT_COLUMNS
     assert frame["message_id"].tolist() == ["first", "later"]
-    assert frame["evidence_message_ids"].tolist() == ["none", "history_2,history_1"]
+    assert frame["evidence_message_ids"].tolist() == ["none", "history_2;history_1"]
 
 
 @pytest.mark.parametrize(
@@ -65,5 +65,5 @@ def test_write_output_csv_writes_a_readable_utf8_submission(tmp_path):
     assert written == destination
     assert tuple(parsed.columns) == OUTPUT_COLUMNS
     assert parsed.to_dict("records") == frame.astype(str).to_dict("records")
-    assert parsed.loc[parsed["message_id"] == "two", "evidence_message_ids"].item() == "history_2,history_1"
+    assert parsed.loc[parsed["message_id"] == "two", "evidence_message_ids"].item() == "history_2;history_1"
     assert b"\r\n" not in written.read_bytes()

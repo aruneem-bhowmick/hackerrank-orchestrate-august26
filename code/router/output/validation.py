@@ -11,7 +11,7 @@ import pandas as pd
 from router.dataset.contract import validate_row_count_parity
 from router.decision.message_type import ALLOWED_MESSAGE_TYPES
 from router.errors import OutputValidationError, RowCountParityError
-from router.output.writer import OUTPUT_COLUMNS
+from router.output.writer import EVIDENCE_DELIMITER, OUTPUT_COLUMNS
 
 ALLOWED_ACTIONS = frozenset({"notify", "digest", "mute"})
 """The fixed action values accepted by the submission contract."""
@@ -90,7 +90,7 @@ def _validate_confidence(row_index: object, value: object) -> None:
 
 
 def _validate_evidence(row_index: object, value: object) -> None:
-    """Require `none` or a comma-separated list of distinct, non-blank ids.
+    """Require `none` or a semicolon-separated list of distinct, non-blank ids.
 
     `none` is only valid as the entire field; it may not appear alongside
     other ids, and no id may repeat.
@@ -99,7 +99,9 @@ def _validate_evidence(row_index: object, value: object) -> None:
         raise OutputValidationError(f"output row {row_index} has invalid evidence_message_ids {value!r}.")
     if value == "none":
         return
-    parts = [part.strip() for part in value.split(",")]
+    if "," in value:
+        raise OutputValidationError(f"output row {row_index} has invalid evidence_message_ids {value!r}.")
+    parts = [part.strip() for part in value.split(EVIDENCE_DELIMITER)]
     if any(not part for part in parts) or "none" in parts or len(set(parts)) != len(parts):
         raise OutputValidationError(f"output row {row_index} has invalid evidence_message_ids {value!r}.")
 

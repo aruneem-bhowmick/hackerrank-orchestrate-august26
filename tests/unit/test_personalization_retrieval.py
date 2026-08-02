@@ -76,6 +76,15 @@ def test_empty_evidence_serializes_to_none() -> None:
     assert evidence_ids_for_output(bundle) == "none"
 
 
+def test_multiple_evidence_ids_serialize_with_semicolons() -> None:
+    """REQ-P3-04: output evidence follows the participant-facing delimiter contract."""
+    bundle = EvidenceBundle(
+        "incoming", ("history_1", "history_2"), "source_and_tfidf", "tfidf", {}
+    )
+
+    assert evidence_ids_for_output(bundle) == "history_1;history_2"
+
+
 def test_no_evidence_bundle_preserves_id_and_signal_mapping() -> None:
     """REQ-P3-04: the no-match factory retains the message and score inputs."""
     signals = {"value_score_adjustment": -0.25, "urgency_score_adjustment": 0.0}
