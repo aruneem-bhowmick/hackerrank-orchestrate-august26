@@ -7,22 +7,15 @@ import pandas as pd
 
 from router.dataset.identifiers import diff_id_sets, find_duplicates
 from router.dataset.loader import DatasetBundle
+from router.dataset.schema import DATASET_FILES
 from router.decision.trace import DecisionRecord
 from router.errors import OutputValidationError
 
-_MESSAGE_INPUT_COLUMNS = (
-    "message_id",
-    "user_id",
-    "conversation_type",
-    "group_id",
-    "business_id",
-    "sender_user_id",
-    "created_at",
-    "message_text",
-    "media_type",
-    "media_id",
-    "forwarded_count",
+_MESSAGE_INPUT_COLUMNS = next(
+    spec.required_columns for spec in DATASET_FILES if spec.attribute == "messages"
 )
+"""The messages.csv input schema, sourced from the dataset schema registry
+so this never drifts independently of what the loader actually requires."""
 
 
 @dataclass(frozen=True)
