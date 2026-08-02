@@ -26,6 +26,16 @@ def build_reason(
     template calls for it. Falls back to a content/action-derived generic
     sentence only when decision_basis is exactly ("no_signals",). Never
     raises for well-formed input.
+
+    A basis component only names one contributing factor to value_score
+    or urgency_score, not the winning factor — fuse_action can, e.g., mute
+    a group and still land on "notify" if content urgency or engagement
+    outweighs that penalty. So every "elevating" component (one that
+    argues for a higher-priority action) is gated on action != "mute",
+    and every "suppressive" component (one that argues for a lower-
+    priority action) is gated on action != "notify" — a component whose
+    own direction contradicts the actual action is never narrated as the
+    cause.
     """
     basis_set = set(decision_basis)
 
@@ -43,8 +53,11 @@ def build_reason(
             "and is muted regardless of sender history."
         )
 
-    if "muted_group_mention_override" in basis_set:
+    if "muted_group_mention_override" in basis_set and action != "mute":
         return "The group is muted, but you were directly mentioned, which raises this above the group's baseline."
+
+    if "content_urgency_signal" in basis_set and action != "mute":
+        return "The message contains explicit deadline or urgency language."
 
     borderline_component = next((item for item in decision_basis if item.startswith("borderline_safety_risk")), None)
     if borderline_component is not None and action != "mute":
@@ -53,13 +66,13 @@ def build_reason(
             "priority, though not enough to mute it outright."
         )
 
-    if "sender_dismissal_history" in basis_set:
+    if "sender_dismissal_history" in basis_set and action != "notify":
         return "Similar historical messages were ignored, dismissed, or muted by this user."
 
-    if "group_muted_suppressed" in basis_set:
+    if "group_muted_suppressed" in basis_set and action != "notify":
         return "This group is muted by the user, and there is no direct mention to override that."
 
-    if "quiet_hours_suppressed" in basis_set:
+    if "quiet_hours_suppressed" in basis_set and action != "notify":
         return "This arrived during the user's quiet hours, so it is held back rather than delivered now."
 
     if "sender_engagement_history" in basis_set and action == "notify":
