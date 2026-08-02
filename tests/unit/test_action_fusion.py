@@ -156,3 +156,31 @@ def test_content_urgency_alone_can_be_the_only_basis_component():
     result = fuse_action("msg_16", verdict, signals, content_urgency=True)
 
     assert result.decision_basis == ("content_urgency_signal",)
+
+
+def test_safety_override_never_regresses_against_maximally_favorable_signals():
+    """REQ-P1-04 regression pin: no combination of favorable signals, including
+    content urgency, can rescue a blocked verdict from "mute". Must never
+    regress as decision fusion evolves."""
+    verdict = make_verdict(
+        message_id="msg_scam",
+        is_blocked=True,
+        risk_type="scam",
+        risk_confidence=0.95,
+        risk_signals=("payment or credential request",),
+    )
+    maximally_favorable_signals = make_signals(
+        group_role="admin",
+        value_score_adjustment=1.0,
+        urgency_score_adjustment=1.0,
+        open_rate=1.0,
+        reply_rate=1.0,
+        dismiss_rate=0.0,
+        engagement_lift=0.5,
+        evidence_strength=0.25,
+        source_history_count=10,
+    )
+
+    result = fuse_action("msg_scam", verdict, maximally_favorable_signals, content_urgency=True)
+
+    assert result.action == "mute"
