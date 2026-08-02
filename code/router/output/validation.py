@@ -86,12 +86,17 @@ def _validate_confidence(row_index: object, value: object) -> None:
 
 
 def _validate_evidence(row_index: object, value: object) -> None:
-    """Require `none` or a comma-separated list whose every id is non-blank."""
+    """Require `none` or a comma-separated list of distinct, non-blank ids.
+
+    `none` is only valid as the entire field; it may not appear alongside
+    other ids, and no id may repeat.
+    """
     if not isinstance(value, str):
         raise OutputValidationError(f"output row {row_index} has invalid evidence_message_ids {value!r}.")
     if value == "none":
         return
-    if any(not part.strip() for part in value.split(",")):
+    parts = [part.strip() for part in value.split(",")]
+    if any(not part for part in parts) or "none" in parts or len(set(parts)) != len(parts):
         raise OutputValidationError(f"output row {row_index} has invalid evidence_message_ids {value!r}.")
 
 

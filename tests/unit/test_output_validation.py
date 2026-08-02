@@ -67,6 +67,9 @@ def test_validate_output_frame_rejects_blank_public_fields(field, value):
         ("confidence", 1.01, "outside"),
         ("evidence_message_ids", "history_1,", "invalid evidence"),
         ("evidence_message_ids", ",history_1", "invalid evidence"),
+        ("evidence_message_ids", "none,history_1", "invalid evidence"),
+        ("evidence_message_ids", "history_1,none", "invalid evidence"),
+        ("evidence_message_ids", "history_1,history_1", "invalid evidence"),
     ],
 )
 def test_validate_output_frame_rejects_invalid_field_values(field, value, match):
