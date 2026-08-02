@@ -19,10 +19,10 @@ def test_full_load_stage_sequence_on_fixture_dataset(fixtures_dir):
     assert len(timelines) == 2
 
 
-def test_cli_exits_zero_and_prints_a_plain_summary_on_the_real_dataset(repo_root):
+def test_cli_exits_zero_and_prints_a_plain_summary_on_the_real_dataset(repo_root, tmp_path):
     """Running the CLI against the real dataset exits 0 with a readable summary."""
     result = subprocess.run(
-        [sys.executable, str(repo_root / "code" / "main.py")],
+        [sys.executable, str(repo_root / "code" / "main.py"), "--output", str(tmp_path / "output.csv")],
         cwd=repo_root,
         capture_output=True,
         text=True,

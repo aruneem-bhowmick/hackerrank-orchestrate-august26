@@ -62,3 +62,4 @@ def test_write_output_csv_writes_a_readable_utf8_submission(tmp_path):
     assert written == destination
     assert tuple(parsed.columns) == OUTPUT_COLUMNS
     assert parsed.to_dict("records") == frame.astype(str).to_dict("records")
+    assert b"\r\n" not in written.read_bytes()
