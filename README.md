@@ -128,7 +128,7 @@ or voice rows.
 Before submission, confirm that the command completed successfully and that
 `output.csv` has exactly the six required columns, one row for every input
 `message_id`, populated action/type/confidence values, and either `none` or
-valid historical ids in `evidence_message_ids`.
+semicolon-separated historical ids in `evidence_message_ids`.
 
 You may use any language or runtime. Python, JavaScript, and TypeScript are all reasonable choices.
 

@@ -34,7 +34,7 @@ def validate_output_frame(messages: pd.DataFrame, output: pd.DataFrame) -> None:
 
     Checks exact columns/order, one-to-one message-id parity, non-empty action,
     message_type, reason, confidence, and evidence fields, allowed actions,
-    finite confidence in [0, 1], and a `none` or comma-separated evidence
+    finite confidence in [0, 1], and a `none` or semicolon-separated evidence
     representation. Returns None without mutating either frame.
     """
 ```
@@ -50,7 +50,7 @@ def validate_output_frame(messages: pd.DataFrame, output: pd.DataFrame) -> None:
 4. Permit only `notify`, `digest`, or `mute`; validate `message_type` against
    the existing fixed allowed-value set. Require a non-empty reason so P4's
    human explanation cannot disappear in a CSV coercion.
-5. Evidence must be exactly `none` or a non-empty comma-separated id list with
+5. Evidence must be exactly `none` or a non-empty semicolon-separated id list with
    no blank segment; reject null, `""`, `"none,"`, and whitespace entries.
 
 ## Standards to apply

@@ -40,7 +40,7 @@ def build_output_frame(
     """Return one ordered submission row per message id without writing I/O.
 
     The returned frame has exactly OUTPUT_COLUMNS. Empty evidence ids become
-    the string "none"; non-empty ids are joined deterministically with commas.
+    the string "none"; non-empty ids are joined deterministically with semicolons.
     Raises OutputValidationError when identifiers cannot form a one-to-one
     mapping, leaving semantic field validation to validate_output_frame.
     """
@@ -57,7 +57,7 @@ def write_output_csv(frame: pd.DataFrame, path: str | Path) -> Path:
    name offending ids.
 3. Iterate the supplied source sequence, not a set or mapping iteration.
    Serialize `confidence` as its numeric value; serialize evidence as `none`
-   for an empty tuple or comma-joined ids otherwise.
+   for an empty tuple or semicolon-joined ids otherwise.
 4. Write with `index=False`, UTF-8, an explicit column order, and create only
    the requested output parent directory when necessary. Do not write a
    partial CSV: validate the complete in-memory frame before `to_csv`.
@@ -72,7 +72,7 @@ def write_output_csv(frame: pd.DataFrame, path: str | Path) -> Path:
 
 ## Test suite (exhaustive)
 - **Unit:** construct records with empty and populated evidence; assert exact
-  columns/order, source ordering, comma serialization, `none`, key/id parity,
+  columns/order, source ordering, semicolon serialization, `none`, key/id parity,
   duplicate/missing/extra-id errors. `tests/unit/test_output_writer.py`.
 - **Integration:** feed real `run_decision_fusion` output from a fixture into
   the writer, then parse its CSV and compare all six values per id.
