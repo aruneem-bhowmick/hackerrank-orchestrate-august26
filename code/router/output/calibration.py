@@ -50,14 +50,12 @@ def measure_calibration(
     """
     _validate_sample_identifiers(decisions, sample_messages)
     total = len(sample_messages)
-    action_matches = sum(
-        decisions[row["message_id"]].action == row["action"]
-        for row in sample_messages.to_dict("records")
-    )
-    message_type_matches = sum(
-        decisions[row["message_id"]].message_type == row["message_type"]
-        for row in sample_messages.to_dict("records")
-    )
+    action_matches = 0
+    message_type_matches = 0
+    for row in sample_messages.to_dict("records"):
+        decision = decisions[row["message_id"]]
+        action_matches += decision.action == row["action"]
+        message_type_matches += decision.message_type == row["message_type"]
     return CalibrationReport(
         total=total,
         action_matches=action_matches,
