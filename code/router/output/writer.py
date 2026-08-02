@@ -6,6 +6,7 @@ from tempfile import NamedTemporaryFile
 
 import pandas as pd
 
+from router.dataset.identifiers import diff_id_sets, find_duplicates, find_mismatched_mapping_keys
 from router.decision.trace import DecisionRecord
 from router.errors import OutputValidationError
 
@@ -66,21 +67,17 @@ def _validate_decision_identifiers(
 ) -> None:
     """Reject duplicate, missing, extra, or internally inconsistent decision identifiers."""
     source_ids = list(message_ids)
-    if len(set(source_ids)) != len(source_ids):
+    duplicates = find_duplicates(source_ids)
+    if duplicates:
         raise OutputValidationError("messages contain duplicate message_id values.")
 
-    source_set = set(source_ids)
-    decision_set = set(decisions)
-    if decision_set != source_set:
-        missing = sorted(source_set - decision_set)
-        extra = sorted(decision_set - source_set)
+    missing, extra = diff_id_sets(source_ids, decisions)
+    if missing or extra:
         raise OutputValidationError(
             f"decision records disagree with source message ids: missing={missing}; extra={extra}."
         )
 
-    inconsistent = sorted(
-        key for key, record in decisions.items() if key != record.message_id
-    )
+    inconsistent = find_mismatched_mapping_keys(decisions, id_of=lambda record: record.message_id)
     if inconsistent:
         raise OutputValidationError(
             f"decision mapping keys do not match DecisionRecord.message_id: {inconsistent}."

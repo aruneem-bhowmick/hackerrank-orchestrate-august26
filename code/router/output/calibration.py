@@ -5,6 +5,7 @@ from collections.abc import Mapping
 
 import pandas as pd
 
+from router.dataset.identifiers import diff_id_sets, find_duplicates
 from router.dataset.loader import DatasetBundle
 from router.decision.trace import DecisionRecord
 from router.errors import OutputValidationError
@@ -96,11 +97,10 @@ def _validate_sample_identifiers(
     if sample_messages.empty:
         raise OutputValidationError("sample_messages must contain at least one solved row.")
     sample_ids = list(sample_messages["message_id"])
-    if len(set(sample_ids)) != len(sample_ids):
+    if find_duplicates(sample_ids):
         raise OutputValidationError("sample_messages contains duplicate message_id values.")
-    if set(decisions) != set(sample_ids):
-        missing = sorted(set(sample_ids) - set(decisions))
-        extra = sorted(set(decisions) - set(sample_ids))
+    missing, extra = diff_id_sets(sample_ids, decisions)
+    if missing or extra:
         raise OutputValidationError(
             f"sample decisions disagree with sample message ids: missing={missing}; extra={extra}."
         )
