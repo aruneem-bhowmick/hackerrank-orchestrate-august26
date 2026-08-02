@@ -2,14 +2,16 @@
 
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from router.errors import ASRClientError, OCRClientError
 from router.ingestion.asr import ASRResult
 from router.ingestion.cache import CachingASRClient, CachingOCRClient
 from router.ingestion.ocr import OCRResult
+from router.ingestion.pipeline import run_media_ingestion
 
-from ingestion_fakes import FakeASRClient, FakeOCRClient
+from ingestion_fakes import FakeASRClient, FakeOCRClient, make_message
 
 
 def test_ocr_cache_reuses_results_for_the_same_media_path(tmp_path):
@@ -69,3 +71,18 @@ def test_asr_cache_re_raises_a_cached_failure_without_retrying(tmp_path):
         cached.transcribe(audio_path)
 
     assert inner.calls == [audio_path]
+
+
+def test_run_media_ingestion_reuses_a_caller_supplied_caching_client(load_fixture_bundle, fixtures_dir):
+    """A CachingOCRClient passed to two separate batch calls is not re-wrapped."""
+    bundle = load_fixture_bundle("dataset_valid")
+    image_message = make_message(message_id="img_message", media_type="image", media_id="img_test_001")
+    bundle.messages = pd.DataFrame([image_message], columns=list(image_message))
+
+    inner = FakeOCRClient(OCRResult("Poster", 0.8, "poster_promo", False, None))
+    shared_ocr_client = CachingOCRClient(inner)
+
+    run_media_ingestion(bundle, fixtures_dir / "dataset_valid", shared_ocr_client, FakeASRClient())
+    run_media_ingestion(bundle, fixtures_dir / "dataset_valid", shared_ocr_client, FakeASRClient())
+
+    assert len(inner.calls) == 1

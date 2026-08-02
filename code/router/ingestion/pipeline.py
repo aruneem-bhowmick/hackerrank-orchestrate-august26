@@ -248,15 +248,20 @@ def run_media_ingestion(
     """Normalize every message in bundle.messages; nothing is silently dropped.
 
     Defaults to build_ocr_client()/build_asr_client() when a client is not
-    supplied, then wraps whichever client is in play (default-built or
-    caller-supplied) in the matching caching decorator before any message
-    is processed, so cache scope is exactly this one batch run. Raises
+    supplied. A supplied client already wrapped in the matching caching
+    decorator (CachingOCRClient/CachingASRClient) is used as-is, so a caller
+    can share one cache across several calls (e.g. a production and a
+    calibration pass in the same run); any other supplied or default-built
+    client is wrapped fresh, so cache scope defaults to exactly this one
+    batch run unless a caller explicitly opts into sharing. Raises
     MediaIngestionError if the produced count does not match
     len(bundle.messages) — a missing entry here would otherwise surface
     only as a mysterious gap much later, in the final output.
     """
-    ocr_client = CachingOCRClient(ocr_client or build_ocr_client())
-    asr_client = CachingASRClient(asr_client or build_asr_client())
+    if not isinstance(ocr_client, CachingOCRClient):
+        ocr_client = CachingOCRClient(ocr_client or build_ocr_client())
+    if not isinstance(asr_client, CachingASRClient):
+        asr_client = CachingASRClient(asr_client or build_asr_client())
 
     normalized = {
         _string(message, "message_id"): normalize_message(
