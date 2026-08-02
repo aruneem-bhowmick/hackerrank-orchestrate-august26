@@ -1,6 +1,7 @@
 """Integration coverage for routing solved samples without exposing labels."""
 
 from ingestion_fakes import FakeASRClient, FakeOCRClient
+import pytest
 
 from router.dataset.timeline import build_user_timelines
 from router.decision.pipeline import run_decision_fusion
@@ -23,8 +24,19 @@ def test_solved_sample_uses_the_production_routing_path(load_fixture_bundle, fix
     decisions = run_decision_fusion(sample_bundle, normalized, verdicts, evidence)
 
     report = measure_calibration(decisions, bundle.sample_messages)
+    sample_by_id = bundle.sample_messages.set_index("message_id")
+    expected_action_matches = sum(
+        decision.action == sample_by_id.loc[message_id, "action"]
+        for message_id, decision in decisions.items()
+    )
+    expected_message_type_matches = sum(
+        decision.message_type == sample_by_id.loc[message_id, "message_type"]
+        for message_id, decision in decisions.items()
+    )
 
     assert report.total == len(bundle.sample_messages)
     assert set(decisions) == set(bundle.sample_messages["message_id"])
-    assert 0.0 <= report.action_agreement <= 1.0
-    assert 0.0 <= report.message_type_agreement <= 1.0
+    assert report.action_matches == expected_action_matches
+    assert report.message_type_matches == expected_message_type_matches
+    assert report.action_agreement == pytest.approx(expected_action_matches / report.total)
+    assert report.message_type_agreement == pytest.approx(expected_message_type_matches / report.total)

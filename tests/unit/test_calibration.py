@@ -50,6 +50,52 @@ def test_measure_calibration_reports_independent_action_and_type_rates():
     assert format_calibration_report(report) == "Sample calibration: action 2/2 (100.0%); message_type 1/2 (50.0%)."
 
 
+def test_measure_calibration_reports_full_agreement_for_both_metrics():
+    """REQ-P5-02 reports exact counts and rates when every solved label matches."""
+    decisions = {
+        "one": _record("one", "notify", "personal"),
+        "two": _record("two", "digest", "event"),
+    }
+
+    report = measure_calibration(decisions, _sample())
+
+    assert (report.total, report.action_matches, report.message_type_matches) == (2, 2, 2)
+    assert (report.action_agreement, report.message_type_agreement) == (1.0, 1.0)
+    assert format_calibration_report(report) == "Sample calibration: action 2/2 (100.0%); message_type 2/2 (100.0%)."
+
+
+def test_measure_calibration_reports_zero_matches_for_both_metrics():
+    """REQ-P5-02 keeps both metrics at zero when no solved label matches."""
+    decisions = {
+        "one": _record("one", "mute", "spam"),
+        "two": _record("two", "mute", "spam"),
+    }
+
+    report = measure_calibration(decisions, _sample())
+
+    assert (report.total, report.action_matches, report.message_type_matches) == (2, 0, 0)
+    assert (report.action_agreement, report.message_type_agreement) == (0.0, 0.0)
+    assert format_calibration_report(report) == "Sample calibration: action 0/2 (0.0%); message_type 0/2 (0.0%)."
+
+
+def test_measure_calibration_does_not_mutate_decisions_or_sample_rows():
+    """REQ-P5-02 compares labels without changing either caller-owned input."""
+    decisions = {
+        "one": _record("one", "notify", "personal"),
+        "two": _record("two", "digest", "business_update"),
+    }
+    sample = _sample()
+    original_decisions = decisions.copy()
+    original_sample = sample.copy(deep=True)
+
+    report = measure_calibration(decisions, sample)
+
+    assert (report.total, report.action_matches, report.message_type_matches) == (2, 2, 1)
+    assert (report.action_agreement, report.message_type_agreement) == (1.0, 0.5)
+    assert decisions == original_decisions
+    assert sample.equals(original_sample)
+
+
 def test_build_sample_bundle_excludes_solved_labels_from_routing_input(load_fixture_bundle):
     """REQ-P5-02 exposes only messages-schema fields to the sample routing path."""
     bundle = load_fixture_bundle("dataset_valid")
