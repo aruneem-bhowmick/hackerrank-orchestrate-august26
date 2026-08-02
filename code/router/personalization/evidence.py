@@ -46,5 +46,5 @@ def no_evidence_bundle(message_id: str, signals: Mapping[str, object]) -> Eviden
 
 
 def evidence_ids_for_output(bundle: EvidenceBundle) -> str:
-    """Return comma-separated evidence ids or the required `none` sentinel."""
-    return ",".join(bundle.evidence_ids) if bundle.evidence_ids else "none"
+    """Return semicolon-separated evidence ids or the required `none` sentinel."""
+    return ";".join(bundle.evidence_ids) if bundle.evidence_ids else "none"
