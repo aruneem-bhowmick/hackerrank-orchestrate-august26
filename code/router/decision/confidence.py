@@ -43,9 +43,15 @@ def compute_signal_agreement(verdict: SafetyVerdict, signals: Mapping[str, objec
     return round(max(0.0, 1.0 - lean), _ROUND_DECIMAL_PLACES)
 
 
-def compute_confidence(verdict: SafetyVerdict, signals: Mapping[str, object]) -> float:
+def compute_confidence(verdict: SafetyVerdict, signals: Mapping[str, object], signal_agreement: float) -> float:
     """Return confidence in [0, 1] as a documented weighted sum of safety
     certainty, normalized evidence strength, and signal agreement.
+
+    signal_agreement is the caller-computed result of
+    compute_signal_agreement(verdict, signals) — accepted as a parameter
+    rather than recomputed here because callers (router.decision.pipeline)
+    also need that same value on its own for DecisionRecord.signal_agreement,
+    and computing it twice per message would be wasted work.
 
     Never returns a raw, ungrounded number — every summand is
     independently nameable and testable (see _safety_certainty and
@@ -55,7 +61,7 @@ def compute_confidence(verdict: SafetyVerdict, signals: Mapping[str, object]) ->
     confidence = (
         CONFIDENCE_WEIGHT_SAFETY * _safety_certainty(verdict)
         + CONFIDENCE_WEIGHT_EVIDENCE * evidence_ratio
-        + CONFIDENCE_WEIGHT_AGREEMENT * compute_signal_agreement(verdict, signals)
+        + CONFIDENCE_WEIGHT_AGREEMENT * signal_agreement
     )
     return round(_bound(confidence), _ROUND_DECIMAL_PLACES)
 

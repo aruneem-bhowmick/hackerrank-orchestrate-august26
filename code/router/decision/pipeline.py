@@ -104,11 +104,11 @@ def _build_decision_record(
     signals = evidence.personalization_signals
     content_urgency = detect_content_urgency(message.normalized_text)
     fusion = fuse_action(message_id, verdict, signals, content_urgency)
-    confidence = compute_confidence(verdict, signals)
+    agreement = compute_signal_agreement(verdict, signals)
+    confidence = compute_confidence(verdict, signals, agreement)
     message_type = select_message_type(
         verdict, fusion.action, message, signals, business, forwarded_count, content_urgency
     )
-    agreement = compute_signal_agreement(verdict, signals)
     reason = build_reason(fusion.action, message_type, verdict, fusion.decision_basis, signals)
 
     return DecisionRecord(
