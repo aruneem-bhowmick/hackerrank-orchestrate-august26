@@ -63,14 +63,14 @@ def test_safety_override_holds_through_the_full_assembled_pipeline(load_fixture_
     assert decisions["scam_regression"].message_type == "scam"
 
 
-def test_cli_reports_decision_fusion_summary_for_the_real_dataset(repo_root):
-    """A key-less local run over the real dataset completes and reports a decision summary."""
+def test_cli_reports_decision_fusion_summary_for_the_real_dataset(repo_root, tmp_path):
+    """A key-less local run reports a decision summary without modifying dataset/output.csv."""
     environment = os.environ.copy()
     environment.pop("ANTHROPIC_API_KEY", None)
     environment.pop("OPENAI_API_KEY", None)
 
     result = subprocess.run(
-        [sys.executable, str(repo_root / "code" / "main.py")],
+        [sys.executable, str(repo_root / "code" / "main.py"), "--output", str(tmp_path / "output.csv")],
         cwd=repo_root,
         env=environment,
         capture_output=True,
@@ -83,3 +83,4 @@ def test_cli_reports_decision_fusion_summary_for_the_real_dataset(repo_root):
     assert "notify" in result.stdout
     assert "digest" in result.stdout
     assert "mute" in result.stdout
+    assert "Sample calibration:" in result.stdout
