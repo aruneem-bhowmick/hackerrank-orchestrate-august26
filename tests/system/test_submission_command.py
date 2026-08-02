@@ -6,11 +6,13 @@ import subprocess
 import sys
 
 import pandas as pd
+import pytest
 
 from router.output.validation import validate_output_frame
 from router.output.writer import OUTPUT_COLUMNS
 
 
+@pytest.mark.req("REQ-P5-04")
 def test_cli_help_describes_the_documented_path_options(repo_root):
     """REQ-P5-04 exposes discoverable dataset and output path overrides."""
     result = subprocess.run(
@@ -26,6 +28,7 @@ def test_cli_help_describes_the_documented_path_options(repo_root):
     assert "--output" in result.stdout
 
 
+@pytest.mark.req("REQ-P5-04")
 def test_keyless_command_generates_a_valid_fixture_submission(repo_root, fixtures_dir, tmp_path):
     """REQ-P5-01/02/03/04 run the complete command without live media credentials."""
     dataset_dir = tmp_path / "dataset"
