@@ -615,6 +615,44 @@ Append-only. Each entry: date, decision, alternatives considered, rationale.
   not tuning" note above for why continuing to chase these five rows would
   overfit rather than generalize to the real 110-row `dataset/messages.csv`.
 
+  Review pass (2026-08-02): a precision-focused code review of the PR
+  surfaced seven issues, all fixed and re-verified against the full test
+  suite. Two were correctness bugs in `reason.py`'s `build_reason`: every
+  basis component `fuse_action` names in `decision_basis` reflects a
+  signal that *contributed to* `value_score`/`urgency_score`, not one that
+  *won* — `sender_dismissal_history`, `group_muted_suppressed`, and
+  `quiet_hours_suppressed` were selected unconditionally, so a muted group
+  or dismissal history that content urgency and engagement outweighed
+  could still be reported as the reason a message was muted, on a row
+  whose `action` was actually `notify` (exact repro: `group_muted=True`,
+  `mention_override=False`, `engagement_lift=0.5`,
+  `evidence_strength=MAX_EVIDENCE_STRENGTH`, `content_urgency=True`, clean
+  verdict → `priority == T_NOTIFY` exactly → `action="notify"`, yet
+  `decision_basis` still contained `group_muted_suppressed`). Separately,
+  `decision_basis == ("content_urgency_signal",)` — a state
+  `test_content_urgency_alone_can_be_the_only_basis_component` already
+  proved reachable — matched no branch at all and fell through to the
+  generic "no urgency found" fallback. Fixed by gating every suppressive
+  branch on `action != "notify"` and every elevating branch (including the
+  new `content_urgency_signal` branch) on `action != "mute"`, so a
+  component whose own direction contradicts the actual action is never
+  narrated as its cause.
+
+  The remaining five issues were efficiency/duplication, not correctness:
+  `detect_content_urgency` and `compute_signal_agreement` were each
+  computed twice per message (once for `fuse_action`/`DecisionRecord`
+  directly, again inside `select_message_type`/`compute_confidence`) —
+  fixed by threading the already-computed value through as a parameter
+  instead of re-deriving it. `run_action_fusion`, an earlier-stage
+  scaffold from before `run_decision_fusion` existed, had no production
+  caller, silently omitted the content-urgency signal per its own
+  docstring, and sat in the same module as the complete entrypoint under
+  the same `run_*` naming convention — removed, with its regression
+  coverage migrated onto `fuse_action` directly. `fusion.py` and
+  `confidence.py` each defined an identical private `[0, 1]` clamp —
+  unified into one `bound01` in `thresholds.py`, which both already
+  imported from.
+
 ---
 
 ## 6. Open Questions (resolve once Claude Code has inspected the actual dataset)
