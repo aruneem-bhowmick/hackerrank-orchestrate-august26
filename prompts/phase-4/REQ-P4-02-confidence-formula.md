@@ -106,7 +106,7 @@ def compute_confidence(verdict: SafetyVerdict, signals: Mapping[str, object]) ->
      the risk signal) → return `1.0`. Else → return
      `round(max(0.0, 1.0 - lean), 6)`.
 5. `compute_confidence`:
-   ```
+   ```python
    evidence_ratio = clamp(signals["evidence_strength"] / MAX_EVIDENCE_STRENGTH, 0, 1)
    confidence = (
        CONFIDENCE_WEIGHT_SAFETY * _safety_certainty(verdict)
