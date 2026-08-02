@@ -52,7 +52,7 @@ def write_output_csv(frame: pd.DataFrame, path: str | Path) -> Path:
             mode="w", encoding="utf-8", newline="", suffix=".tmp", dir=output_path.parent, delete=False
         ) as temporary:
             temporary_path = Path(temporary.name)
-            frame.to_csv(temporary, index=False, columns=OUTPUT_COLUMNS)
+            frame.to_csv(temporary, index=False, columns=OUTPUT_COLUMNS, lineterminator="\n")
         temporary_path.replace(output_path)
     except Exception:
         if temporary_path is not None:
