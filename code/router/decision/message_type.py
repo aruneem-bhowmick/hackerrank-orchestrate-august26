@@ -10,7 +10,6 @@ business-mute label, then deterministic content classification.
 import re
 from collections.abc import Mapping
 
-from router.decision.content_signals import detect_content_urgency
 from router.errors import DecisionFusionError
 from router.ingestion.message import NormalizedMessage
 from router.safety.thresholds import FORWARD_CHAIN_COUNT_THRESHOLD
@@ -81,6 +80,7 @@ def select_message_type(
     signals: Mapping[str, object],
     business: Mapping[str, object] | None,
     forwarded_count: int,
+    content_urgency: bool,
 ) -> str:
     """Deterministically select one member of ALLOWED_MESSAGE_TYPES.
 
@@ -89,6 +89,12 @@ def select_message_type(
     classification of message.normalized_text. Always returns a member of
     ALLOWED_MESSAGE_TYPES — never raises for well-formed input, and never
     invents a value outside that set.
+
+    content_urgency is the caller-computed result of
+    router.decision.content_signals.detect_content_urgency on
+    message.normalized_text, reused as-is rather than recomputed here —
+    the caller (router.decision.pipeline) already computes it once for
+    fuse_action, and this text is the same for both calls.
     """
     if verdict.is_blocked and verdict.risk_type == "scam":
         return validate_message_type("scam")
@@ -103,7 +109,7 @@ def select_message_type(
             return validate_message_type("spam")
         return validate_message_type("promotion")
 
-    return validate_message_type(_classify_content(message, signals))
+    return validate_message_type(_classify_content(message, signals, content_urgency))
 
 
 def validate_message_type(raw: str) -> str:
@@ -121,14 +127,15 @@ def validate_message_type(raw: str) -> str:
     return raw
 
 
-def _classify_content(message: NormalizedMessage, signals: Mapping[str, object]) -> str:
+def _classify_content(message: NormalizedMessage, signals: Mapping[str, object], content_urgency: bool) -> str:
     """Classify message.normalized_text into a coarse content-based message_type.
 
     A direct mention or a plain request for a response ("can you call?")
     is not, by itself, treated as "urgent" — calibration against
     dataset/sample_messages.csv showed a personal direct ask keeps
     message_type "personal" even when it resolves to action "notify";
-    "urgent" is reserved for explicit deadline/escalation language (see
+    "urgent" is reserved for explicit deadline/escalation language, per
+    the caller-supplied content_urgency (see
     router.decision.content_signals.detect_content_urgency).
     """
     text = message.normalized_text or ""
@@ -137,7 +144,7 @@ def _classify_content(message: NormalizedMessage, signals: Mapping[str, object])
         return "greeting"
     if _EVENT_PATTERN.search(text):
         return "event"
-    if detect_content_urgency(text):
+    if content_urgency:
         return "urgent"
     if _PAYMENT_PATTERN.search(text):
         return "payment"
