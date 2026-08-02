@@ -11,12 +11,17 @@ from router.decision.thresholds import (
 from router.personalization.signals import MAX_EVIDENCE_STRENGTH
 
 
+def _confidence(verdict, signals) -> float:
+    """Compute agreement once and feed it into compute_confidence, matching the production call shape."""
+    return compute_confidence(verdict, signals, compute_signal_agreement(verdict, signals))
+
+
 def test_clean_message_with_no_evidence_combines_safety_and_agreement_only():
     """A clean, unremarkable message gets exactly the safety+agreement weight."""
     verdict = make_verdict()
     signals = make_signals()
 
-    confidence = compute_confidence(verdict, signals)
+    confidence = _confidence(verdict, signals)
 
     assert confidence == round(CONFIDENCE_WEIGHT_SAFETY + CONFIDENCE_WEIGHT_AGREEMENT, 6)
 
@@ -24,8 +29,8 @@ def test_clean_message_with_no_evidence_combines_safety_and_agreement_only():
 def test_full_evidence_strength_adds_exactly_the_evidence_weight():
     """Evidence retrieval strength at its documented maximum adds its full weight."""
     verdict = make_verdict()
-    zero_evidence = compute_confidence(verdict, make_signals())
-    full_evidence = compute_confidence(verdict, make_signals(evidence_strength=MAX_EVIDENCE_STRENGTH))
+    zero_evidence = _confidence(verdict, make_signals())
+    full_evidence = _confidence(verdict, make_signals(evidence_strength=MAX_EVIDENCE_STRENGTH))
 
     assert round(full_evidence - zero_evidence, 6) == round(CONFIDENCE_WEIGHT_EVIDENCE, 6)
 
@@ -65,13 +70,24 @@ def test_agreement_partial_lean_is_between_zero_and_one():
     assert agreement == round(1.0 - 0.2, 6)
 
 
+def test_compute_confidence_uses_the_passed_in_agreement_value():
+    """compute_confidence trusts its signal_agreement argument rather than recomputing it."""
+    verdict = make_verdict()
+    signals = make_signals()
+
+    with_full_agreement = compute_confidence(verdict, signals, 1.0)
+    with_no_agreement = compute_confidence(verdict, signals, 0.0)
+
+    assert round(with_full_agreement - with_no_agreement, 6) == round(CONFIDENCE_WEIGHT_AGREEMENT, 6)
+
+
 def test_higher_blocked_risk_confidence_yields_higher_confidence():
     """A stronger combined scam signal is more certain than a barely-over-threshold one."""
     barely_blocked = make_verdict(is_blocked=True, risk_type="scam", risk_confidence=0.55)
     strongly_blocked = make_verdict(is_blocked=True, risk_type="scam", risk_confidence=0.95)
     signals = make_signals()
 
-    assert compute_confidence(strongly_blocked, signals) > compute_confidence(barely_blocked, signals)
+    assert _confidence(strongly_blocked, signals) > _confidence(barely_blocked, signals)
 
 
 def test_confidence_stays_within_unit_interval_across_a_sweep():
@@ -91,5 +107,5 @@ def test_confidence_stays_within_unit_interval_across_a_sweep():
 
     for verdict in verdicts:
         for signals in signal_variants:
-            confidence = compute_confidence(verdict, signals)
+            confidence = _confidence(verdict, signals)
             assert 0.0 <= confidence <= 1.0
