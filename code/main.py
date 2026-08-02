@@ -9,6 +9,9 @@ from router.dataset.loader import DatasetBundle, load_dataset_bundle
 from router.dataset.timeline import build_user_timelines
 from router.decision.pipeline import run_decision_fusion
 from router.errors import DatasetError
+from router.ingestion.asr import ASRClient, build_asr_client
+from router.ingestion.cache import CachingASRClient, CachingOCRClient
+from router.ingestion.ocr import OCRClient, build_ocr_client
 from router.ingestion.pipeline import run_media_ingestion
 from router.output.calibration import (
     CalibrationReport,
@@ -30,13 +33,20 @@ def main(dataset_dir: Path = DEFAULT_DATASET_DIR, output_path: Path | None = Non
     The production artifact is written only after all routing stages, sample
     calibration, and output validation complete. Project validation failures
     and filesystem errors are reported to stderr and return a nonzero status.
+    One OCR/ASR cache is shared between the production and calibration
+    passes, so media referenced by both messages.csv and sample_messages.csv
+    is only ever ingested once.
     """
     output_path = output_path or dataset_dir / "output.csv"
+    ocr_client = CachingOCRClient(build_ocr_client())
+    asr_client = CachingASRClient(build_asr_client())
     try:
         bundle = load_dataset_bundle(dataset_dir)
         validate_row_count_parity(bundle.messages, bundle.output_template)
-        decisions, normalized, verdicts, evidence, timelines = _route_bundle(bundle, dataset_dir)
-        calibration = _calibrate(bundle, dataset_dir)
+        decisions, normalized, verdicts, evidence, timelines = _route_bundle(
+            bundle, dataset_dir, ocr_client, asr_client
+        )
+        calibration = _calibrate(bundle, dataset_dir, ocr_client, asr_client)
         output = build_output_frame(bundle.messages["message_id"].tolist(), decisions)
         validate_output_frame(bundle.messages, output)
         written_path = write_output_csv(output, output_path)
@@ -66,20 +76,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _route_bundle(bundle: DatasetBundle, dataset_dir: Path):
-    """Run the complete upstream routing pipeline for one loaded bundle."""
+def _route_bundle(
+    bundle: DatasetBundle, dataset_dir: Path, ocr_client: OCRClient, asr_client: ASRClient
+):
+    """Run the complete upstream routing pipeline for one loaded bundle.
+
+    ocr_client/asr_client are expected to already be CachingOCRClient/
+    CachingASRClient instances so a caller can share one cache across
+    multiple calls (see run_media_ingestion).
+    """
     timelines = build_user_timelines(bundle)
-    normalized = run_media_ingestion(bundle, dataset_dir)
+    normalized = run_media_ingestion(bundle, dataset_dir, ocr_client, asr_client)
     verdicts = run_safety_gate(bundle, normalized)
     evidence = run_personalization(normalized, bundle, timelines)
     decisions = run_decision_fusion(bundle, normalized, verdicts, evidence)
     return decisions, normalized, verdicts, evidence, timelines
 
 
-def _calibrate(bundle: DatasetBundle, dataset_dir: Path) -> CalibrationReport:
+def _calibrate(
+    bundle: DatasetBundle, dataset_dir: Path, ocr_client: OCRClient, asr_client: ASRClient
+) -> CalibrationReport:
     """Route solved sample inputs through the production path and measure agreement."""
     sample_bundle = build_sample_bundle(bundle)
-    sample_decisions, _, _, _, _ = _route_bundle(sample_bundle, dataset_dir)
+    sample_decisions, _, _, _, _ = _route_bundle(sample_bundle, dataset_dir, ocr_client, asr_client)
     return measure_calibration(sample_decisions, bundle.sample_messages)
 
 
