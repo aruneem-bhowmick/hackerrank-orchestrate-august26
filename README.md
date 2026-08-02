@@ -75,7 +75,7 @@ For image and voice-note messages, `images.csv` and `voice_notes.csv` only provi
 Install the runtime dependencies, then run the complete batch pipeline from
 the repository root:
 
-```powershell
+```shell
 python -m pip install -r requirements.txt
 python code/main.py
 ```
@@ -89,6 +89,16 @@ OCR and voice transcription are optional enhancements. To enable them, set
 their credentials in your shell environment before running the command; never
 place credentials in a source file or commit them:
 
+POSIX shells:
+
+```shell
+export ANTHROPIC_API_KEY="your-key"
+export OPENAI_API_KEY="your-key"
+python code/main.py
+```
+
+PowerShell:
+
 ```powershell
 $env:ANTHROPIC_API_KEY = "your-key"
 $env:OPENAI_API_KEY = "your-key"
@@ -98,8 +108,8 @@ python code/main.py
 Without either key, the command still completes using the documented media
 fallback behavior. To run against another dataset directory or write elsewhere:
 
-```powershell
-python code/main.py --dataset-dir path\to\dataset --output path\to\output.csv
+```shell
+python code/main.py --dataset-dir path/to/dataset --output path/to/output.csv
 ```
 
 ### Calibration sanity check
@@ -108,9 +118,12 @@ Before writing the production artifact, the pipeline routes
 `dataset/sample_messages.csv` through the same code path and reports separate
 agreement rates for `action` and `message_type`. The no-key baseline on the
 included 30 solved rows is **25/30 action agreement (83.3%)** and **28/30
-message-type agreement (93.3%)**. This is a self-verification check, not a
-training input or a substitute for hidden-set evaluation; a run with live
-media credentials can differ for image or voice rows.
+message-type agreement (93.3%)**. It was measured against the 30-row
+`dataset/sample_messages.csv` snapshot with SHA-256
+`C81C6960B65E945D35E8B0CE7C0C70334006AFFCF9C3EF166CF163E960BD1FEE`.
+This is a self-verification check, not a training input or a substitute for
+hidden-set evaluation; a run with live media credentials can differ for image
+or voice rows.
 
 Before submission, confirm that the command completed successfully and that
 `output.csv` has exactly the six required columns, one row for every input

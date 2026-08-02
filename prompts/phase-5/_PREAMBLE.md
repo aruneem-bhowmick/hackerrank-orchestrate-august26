@@ -28,7 +28,7 @@ makes the complete batch run reproducible from one documented command.
 ## Contracts inherited from SPEC.md §1
 
 Decision Record (§1.5):
-```
+```json
 {
   message_id, action, message_type, reason, confidence,
   evidence_message_ids: tuple[str, ...],
@@ -42,7 +42,7 @@ Decision Record (§1.5):
 only validates and writes them, it does not recompute them.
 
 Output (§1.6):
-```
+```csv
 message_id, action, message_type, reason, confidence, evidence_message_ids
 ```
 

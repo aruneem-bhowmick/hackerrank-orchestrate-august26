@@ -30,6 +30,7 @@ individual production rows.
 ```python
 from collections.abc import Mapping
 from dataclasses import dataclass
+import pandas as pd
 from router.decision.trace import DecisionRecord
 
 @dataclass(frozen=True)
@@ -42,7 +43,7 @@ class CalibrationReport:
     message_type_agreement: float
 
 def measure_calibration(
-    decisions: Mapping[str, DecisionRecord], sample_rows: Mapping[str, Mapping[str, object]]
+    decisions: Mapping[str, DecisionRecord], sample_messages: pd.DataFrame
 ) -> CalibrationReport:
     """Compare production-style decisions to reference labels without mutation.
 
