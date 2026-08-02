@@ -53,7 +53,10 @@ def test_build_output_frame_rejects_identifier_contract_violations(message_ids, 
 
 def test_write_output_csv_writes_a_readable_utf8_submission(tmp_path):
     """REQ-P5-01 writes the exact serialized frame without an index column."""
-    frame = build_output_frame(["one"], {"one": _record("one")})
+    frame = build_output_frame(
+        ["one", "two"],
+        {"one": _record("one"), "two": _record("two", ("history_2", "history_1"))},
+    )
     destination = tmp_path / "nested" / "output.csv"
 
     written = write_output_csv(frame, destination)
@@ -62,4 +65,5 @@ def test_write_output_csv_writes_a_readable_utf8_submission(tmp_path):
     assert written == destination
     assert tuple(parsed.columns) == OUTPUT_COLUMNS
     assert parsed.to_dict("records") == frame.astype(str).to_dict("records")
+    assert parsed.loc[parsed["message_id"] == "two", "evidence_message_ids"].item() == "history_2,history_1"
     assert b"\r\n" not in written.read_bytes()

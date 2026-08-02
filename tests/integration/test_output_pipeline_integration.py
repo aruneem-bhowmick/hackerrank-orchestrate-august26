@@ -27,3 +27,12 @@ def test_full_decision_mapping_serializes_to_a_valid_submission(load_fixture_bun
     assert path.exists()
     assert frame["message_id"].tolist() == bundle.messages["message_id"].tolist()
     assert all(frame["evidence_message_ids"].astype(str).str.strip())
+    rows_by_id = frame.set_index("message_id")
+    for message_id, decision in decisions.items():
+        row = rows_by_id.loc[message_id]
+        expected_evidence = ",".join(decision.evidence_message_ids) or "none"
+        assert row["action"] == decision.action
+        assert row["message_type"] == decision.message_type
+        assert row["reason"] == decision.reason
+        assert row["confidence"] == decision.confidence
+        assert row["evidence_message_ids"] == expected_evidence
